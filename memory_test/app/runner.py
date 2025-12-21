@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Optional
-from .config import PERSONALITY_PATH
+from .config import PERSONALITY_PATH, PROMPT_MESSAGE_LIMIT
 from .logger import get_logger
 from .memory import session as session_module
+from .llm import llm_router
 
 logger = get_logger(__name__)
 
@@ -31,7 +32,8 @@ def get_session(new_session: bool, session_id: Optional[str]) -> session_module.
 
 	return session
 
-def get_output() -> str:
+def fallback_response(reason: str) -> str:
+	logger.warning("Falling back to default response: %s", reason)
 	return datetime.now().strftime("Assistant response at %Y-%m-%d %H:%M:%S")
 
 def append_messages_and_save(session: session_module.Session, user_input: str, output: str) -> None:
@@ -46,22 +48,21 @@ def get_personality() -> str:
 	return ""
 
 def get_memory_block() -> str:
-	# return memory block based on session history - empty for now
-	return ""
+	placeholder = "MEMORY: \n\n none."
+	return placeholder
 
 def construct_system_message_content() -> str:
 	personality = get_personality()
 	memory_block = get_memory_block()
-	content = personality
-
-	if memory_block.strip():
-		content += f"\n\nMemory:\n{memory_block}"
+	content = personality + "\n\n" + memory_block
 
 	return content
 
 def construct_prompt(session: session_module.Session, user_input: str) -> list:
 	system_message = {"role": "system", "content": construct_system_message_content()}
-	messages = [system_message] + session.messages + [{"role": "user", "content": user_input}]
+	limit = max(PROMPT_MESSAGE_LIMIT, 0)
+	recent_messages = session.messages[-limit:] if limit > 0 else []
+	messages = [system_message] + recent_messages + [{"role": "user", "content": user_input}]
 	return messages
 
 def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) -> str:
@@ -72,8 +73,11 @@ def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) 
 	logger.info("Constructed prompt with %d messages", len(prompt))
 	logger.debug("Prompt messages: %s", prompt)
 	
-	# placeholder for LLM + memory logic
-	output = get_output()
+	try:
+		output = llm_router.generate_response(prompt)
+		logger.info("Received response from OpenRouter")
+	except llm_router.OpenRouterError as exc:
+		output = fallback_response(str(exc))
 
 	# keeping this atomic so that messages are only saved if both user and assistant messages are added
 	append_messages_and_save(current_session, user_input, output)

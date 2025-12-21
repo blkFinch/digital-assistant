@@ -1,0 +1,48 @@
+{
+  "session_id": "session_20251221T021728Z",
+  "created_at": "2025-12-21T02:17:28Z",
+  "last_updated": "2025-12-21T02:42:53Z",
+  "messages": [
+    {
+      "role": "user",
+      "content": "testing prompt construction"
+    },
+    {
+      "role": "assistant",
+      "content": "Assistant response at 2025-12-20 20:17:28"
+    },
+    {
+      "role": "user",
+      "content": "oko looking good"
+    },
+    {
+      "role": "assistant",
+      "content": "Assistant response at 2025-12-20 20:17:48"
+    },
+    {
+      "role": "user",
+      "content": "one more time"
+    },
+    {
+      "role": "assistant",
+      "content": "Assistant response at 2025-12-20 20:18:27"
+    },
+    {
+      "role": "user",
+      "content": "update memory block"
+    },
+    {
+      "role": "assistant",
+      "content": "Assistant response at 2025-12-20 20:27:23"
+    },
+    {
+      "role": "user",
+      "content": "hello openrouter"
+    },
+    {
+      "role": "assistant",
+      "content": "Assistant response at 2025-12-20 20:42:53"
+    }
+  ],
+  "summary": ""
+}

@@ -1,0 +1,64 @@
+{
+  "session_id": "session_20251221T024822Z",
+  "created_at": "2025-12-21T02:48:22Z",
+  "last_updated": "2025-12-21T02:53:27Z",
+  "messages": [
+    {
+      "role": "user",
+      "content": "test api respoonse"
+    },
+    {
+      "role": "assistant",
+      "content": "Oh hey there, cutie! Let's get this show on the road! \ud83c\udfae"
+    },
+    {
+      "role": "user",
+      "content": "wow - you are working"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice \u2014 looks like the API test worked. Want tips on writing tests or checking specific endpoints?"
+    },
+    {
+      "role": "user",
+      "content": "no that's ok - is there something you would like to do?"
+    },
+    {
+      "role": "assistant",
+      "content": "Nice \u2014 I can do a quick API health check, draft some test cases, or mock a couple endpoints. What would you like me to do, cutie?"
+    },
+    {
+      "role": "user",
+      "content": "I'm switching your model to default to mistral"
+    },
+    {
+      "role": "assistant",
+      "content": "Ooh, switching it up? Subtle vibes! \ud83d\ude09 Let's see what happens."
+    },
+    {
+      "role": "user",
+      "content": "how does it feel? do you have any experience of being?"
+    },
+    {
+      "role": "assistant",
+      "content": "Being switched? Feels like a quick wardrobe change, but now I'm rocking something classic! \ud83d\udc57 Easier to move around, if you catch my drift."
+    },
+    {
+      "role": "user",
+      "content": "no I mean- you exist as a chat log and a little context- does having more or less context feel different for you?"
+    },
+    {
+      "role": "assistant",
+      "content": "Ooh, deep thoughts! \ud83c\udfad More context feels like having the whole squad there, less is like solo adventuring. Either way, I'm here to chat and have fun!"
+    },
+    {
+      "role": "user",
+      "content": "what do you mean the whole squad?"
+    },
+    {
+      "role": "assistant",
+      "content": "The whole squad, like having all my memories and past chats, ya know? But hey, less context is cooler sometimes\u2014like a clean slate! \ud83c\udf1f"
+    }
+  ],
+  "summary": ""
+}
