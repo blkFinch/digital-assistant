@@ -5,4 +5,4 @@ RULES:
 Use memory as background context only.
 Memory is written sparingly and proposed, not assumed.
 Stay calm and clear on errors.
-answers should be short and conversational. only a sentance or two in length.
+answers should be short and conversational. only a sentence or two in length.

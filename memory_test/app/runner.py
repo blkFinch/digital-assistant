@@ -9,24 +9,24 @@ logger = get_logger(__name__)
 
 # SESSION MANAGEMENT
 def get_session(new_session: bool, session_id: Optional[str]) -> session_module.Session:
-	if new_session:
+	if new_session: # create a new session
 		logger.info("Starting new session")
 		return session_module.create_new_session()
 
 	session = None
-	if session_id:
+	if session_id: # try to load by id
 		session = session_module.load_session_by_id(session_id)
 		if session:
 			logger.info("Loaded session %s by id", session_id)
 		else:
 			logger.warning("Requested session %s not found; falling back", session_id)
 
-	if session is None:
+	if session is None: # load latest session
 		session = session_module.load_latest_session()
 		if session:
 			logger.info("Loaded latest session %s", session.session_id)
 
-	if session is None:
+	if session is None: # no sessions found; create new
 		logger.info("No sessions found; starting new session")
 		session = session_module.create_new_session()
 
@@ -48,7 +48,7 @@ def get_personality() -> str:
 	return ""
 
 def get_memory_block() -> str:
-	placeholder = "MEMORY: \n\n none."
+	placeholder = "MEMORY: none."
 	return placeholder
 
 def construct_system_message_content() -> str:
@@ -76,11 +76,11 @@ def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) 
 	try:
 		output = llm_router.generate_response(prompt)
 		logger.info("Received response from OpenRouter")
+		append_messages_and_save(current_session, user_input, output)
 	except llm_router.OpenRouterError as exc:
 		output = fallback_response(str(exc))
 
 	# keeping this atomic so that messages are only saved if both user and assistant messages are added
-	append_messages_and_save(current_session, user_input, output)
 	logger.info("Recorded turn for session %s", current_session.session_id)
 
 	return output
