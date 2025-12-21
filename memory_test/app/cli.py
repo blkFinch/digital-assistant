@@ -3,6 +3,7 @@ import argparse
 import sys
 
 from . import runner
+from .logger import configure_logging
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,12 +24,18 @@ def build_parser() -> argparse.ArgumentParser:
 		dest="session_id",
 		help="use a specific session id instead of the latest one",
 	)
+	parser.add_argument(
+		"--debug",
+		action="store_true",
+		help="enable verbose logging output",
+	)
 	return parser
 
 
 def main() -> None:
 	parser = build_parser()
 	args = parser.parse_args()
+	configure_logging(debug=args.debug)
 	if not args.input_text:
 		print("Please provide input using -i/--input.")
 		sys.exit(1)
