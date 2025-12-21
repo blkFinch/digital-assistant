@@ -38,11 +38,7 @@ def append_messages_and_save(session: session_module.Session, user_input: str, o
 	session_module.append_user_message(session, user_input)
 	session_module.append_assistant_message(session, output)
 	session_module.save_session(session)
-	logger.debug(
-		"Persisted session %s with %d messages",
-		session.session_id,
-		len(session.messages),
-	)
+
 
 def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) -> str:
 	# loads or creates session -- created sessions are empty until user input is added
