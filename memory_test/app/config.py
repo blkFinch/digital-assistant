@@ -9,7 +9,7 @@ load_dotenv()
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
-PERSONALITY_PATH = SESSIONS_DIR / "personality.md"
+PERSONALITY_PATH = DATA_DIR / "personality.md"
 PROMPT_MESSAGE_LIMIT = int(os.getenv("PROMPT_MESSAGE_LIMIT", "15"))
 
 # OpenRouter configuration
