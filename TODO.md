@@ -1,1 +1,0 @@
-TODO add logging system and log when session is not found by id
