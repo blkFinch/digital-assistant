@@ -1,0 +1,20 @@
+{
+  "candidates": [
+    {
+      "type": "preference|relationship|boundary|identity|habit|skill",
+      "subject": "user|assistant|other",
+      "content": "string",
+      "confidence": 0.0,
+      "reason": "string",
+      "action": "create|reinforce"
+    }
+  ],
+  "revisions": [
+    {
+      "target_id": "string",
+      "action": "decrease_confidence|increase_confidence|revise",
+      "new_confidence": 0.0,
+      "reason": "string"
+    }
+  ]
+}

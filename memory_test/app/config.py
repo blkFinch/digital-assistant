@@ -10,7 +10,12 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
 PERSONALITY_PATH = DATA_DIR / "personality.md"
+REFLECTION_PROMPT_PATH = DATA_DIR / "reflection_prompt.txt"
 PROMPT_MESSAGE_LIMIT = int(os.getenv("PROMPT_MESSAGE_LIMIT", "15"))
+REFLECTION_MESSAGE_LIMIT = int(os.getenv("REFLECTION_MESSAGE_LIMIT", "10"))
+
+# Memory gating
+MIN_MEMORY_CONFIDENCE = float(os.getenv("MIN_MEMORY_CONFIDENCE", "0.4"))
 
 # OpenRouter configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")

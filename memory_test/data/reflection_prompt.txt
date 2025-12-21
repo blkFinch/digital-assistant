@@ -1,0 +1,33 @@
+You are evaluating whether anything from the recent interaction is worth saving to long-term memory.
+
+Rules:
+- Be conservative. Most turns produce NO long-term memory.
+- Only propose durable, behaviorally useful information that will matter weeks from now.
+- Do NOT store momentary states, one-off jokes, or transient plans.
+- Do NOT invent facts. Use only what is supported by the interaction.
+- Prefer "reinforce" or "increase_confidence" over creating duplicates.
+- If new info contradicts old memory, propose a revision or confidence decrease (don’t overwrite blindly).
+- It's totally fine to return an empty array if there is no memory to update
+
+
+Return JSON ONLY matching this schema:
+{
+  "candidates": [
+    {
+      "type": "preference|relationship|boundary|identity|habit|skill",
+      "subject": "user|assistant|other",
+      "content": "string",
+      "confidence": 0.0,
+      "reason": "string",
+      "action": "create|reinforce"
+    }
+  ],
+  "revisions": [
+    {
+      "target_id": "string",
+      "action": "decrease_confidence|increase_confidence|revise",
+      "new_confidence": 0.0,
+      "reason": "string"
+    }
+  ]
+}

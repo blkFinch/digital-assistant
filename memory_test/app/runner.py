@@ -1,9 +1,12 @@
+import json
 from datetime import datetime
-from typing import Optional
-from .config import PERSONALITY_PATH, PROMPT_MESSAGE_LIMIT
+from typing import Any, Optional
+from .config import MIN_MEMORY_CONFIDENCE
 from .logger import get_logger
+from .memory import memory_system
 from .memory import session as session_module
 from .llm import llm_router
+from .llm import prompts as prompt_module
 
 logger = get_logger(__name__)
 
@@ -41,35 +44,102 @@ def append_messages_and_save(session: session_module.Session, user_input: str, o
 	session_module.append_assistant_message(session, output)
 	session_module.save_session(session)
 
-# PROMPT CONSTRUCTION
-def get_personality() -> str:
-	if PERSONALITY_PATH.exists():
-		return PERSONALITY_PATH.read_text(encoding="utf-8")
-	return ""
+# REFLECTION HANDLING
 
-def get_memory_block() -> str:
-	placeholder = "MEMORY: none."
-	return placeholder
+def handle_reflection(session: session_module.Session) -> None:
+	reflection_prompt = prompt_module.construct_reflection_prompt(session)
 
-def construct_system_message_content() -> str:
-	personality = get_personality()
-	memory_block = get_memory_block()
-	content = personality + "\n\n" + memory_block
+	if reflection_prompt is None:
+		logger.error("Failed to construct reflection prompt")
+		return
+	
+	logger.debug("Constructed reflection prompt: %s", reflection_prompt)
 
-	return content
+	# Call LLM for reflection
+	try:		
+		reflection_output = llm_router.generate_reflection_response(reflection_prompt)
+		logger.info("Received reflection response from OpenRouter")
+		logger.debug("Reflection output: %s", reflection_output)
+	except llm_router.OpenRouterError as exc:
+		logger.error("Reflection request failed: %s", exc)
+		return
+	
+	# Gate memory updates and apply to long-term memory
+	gated_reflection_output = gate_memory_updates(reflection_output)
+	logger.debug("Gated reflection output: %s", gated_reflection_output)
+	apply_memory_updates(gated_reflection_output)
+	return
 
-def construct_prompt(session: session_module.Session, user_input: str) -> list:
-	system_message = {"role": "system", "content": construct_system_message_content()}
-	limit = max(PROMPT_MESSAGE_LIMIT, 0)
-	recent_messages = session.messages[-limit:] if limit > 0 else []
-	messages = [system_message] + recent_messages + [{"role": "user", "content": user_input}]
-	return messages
+# MEMORY MANAGEMENT
+def gate_memory_updates(candidates_json: str) -> str:
+	"""Filter reflection candidates before applying to long-term memory.
 
+	Currently, we drop any candidate with confidence < MIN_MEMORY_CONFIDENCE.
+	"""
+	try:
+		payload: Any = json.loads(candidates_json)
+	except json.JSONDecodeError:
+		logger.warning("Reflection output was not valid JSON; skipping gating")
+		return candidates_json
+
+	if not isinstance(payload, dict):
+		logger.warning("Reflection output JSON was not an object; skipping gating")
+		return candidates_json
+
+	candidates = payload.get("candidates", [])
+	if not isinstance(candidates, list):
+		logger.warning("Reflection output 'candidates' was not a list; skipping gating")
+		return candidates_json
+
+	kept: list[dict[str, Any]] = []
+	removed = 0
+	for candidate in candidates:
+		if not isinstance(candidate, dict):
+			removed += 1
+			continue
+		confidence = candidate.get("confidence", 0.0)
+		try:
+			confidence_value = float(confidence)
+		except (TypeError, ValueError):
+			removed += 1
+			continue
+		if confidence_value >= MIN_MEMORY_CONFIDENCE:
+			kept.append(candidate)
+		else:
+			removed += 1
+
+	if removed:
+		logger.info(
+			"Gated reflection candidates: kept=%d removed=%d (min_confidence=%s)",
+			len(kept),
+			removed,
+			MIN_MEMORY_CONFIDENCE,
+		)
+
+	payload["candidates"] = kept
+	return json.dumps(payload, ensure_ascii=False)
+
+def apply_memory_updates(updates_json: str) -> None:
+	"""Apply approved memory updates to long-term memory (persisted in ltm.json)."""
+	try:
+		payload: Any = json.loads(updates_json)
+	except json.JSONDecodeError:
+		logger.warning("Cannot apply memory updates: output was not valid JSON")
+		return
+
+	if not isinstance(payload, dict):
+		logger.warning("Cannot apply memory updates: expected JSON object")
+		return
+
+	items = memory_system.apply_memory_updates(payload)
+	logger.info("Long-term memory now has %d items", len(items))
+
+## RUNNER FUNCTION
 def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) -> str:
 	# loads or creates session -- created sessions are empty until user input is added
 	current_session = get_session(new_session, session_id)
 
-	prompt = construct_prompt(current_session, user_input)
+	prompt = prompt_module.construct_prompt(current_session, user_input)
 	logger.info("Constructed prompt with %d messages", len(prompt))
 	logger.debug("Prompt messages: %s", prompt)
 	
@@ -77,6 +147,7 @@ def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) 
 		output = llm_router.generate_response(prompt)
 		logger.info("Received response from OpenRouter")
 		append_messages_and_save(current_session, user_input, output)
+		handle_reflection(current_session)
 	except llm_router.OpenRouterError as exc:
 		output = fallback_response(str(exc))
 

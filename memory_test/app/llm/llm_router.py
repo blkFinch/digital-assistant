@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import requests
 
 from ..config import (
+	DATA_DIR,
 	OPENROUTER_API_KEY,
 	OPENROUTER_APP_NAME,
 	OPENROUTER_BASE_URL,
@@ -41,16 +44,22 @@ def _build_headers() -> Dict[str, str]:
 	return headers
 
 
-def _build_payload(messages: List[Dict[str, str]], model: Optional[str]) -> Dict[str, object]:
-	return {
+def _build_payload(
+	messages: List[Dict[str, str]],
+	model: Optional[str],
+	*,
+	response_format: Optional[Dict[str, Any]] = None,
+) -> Dict[str, object]:
+	payload: Dict[str, object] = {
 		"model": model or OPENROUTER_DEFAULT_MODEL,
 		"messages": messages,
 	}
+	if response_format is not None:
+		payload["response_format"] = response_format
+	return payload
 
 
-def generate_response(messages: List[Dict[str, str]], *, model: Optional[str] = None) -> str:
-	"""Send the chat history to OpenRouter and return the assistant reply."""
-	payload = _build_payload(messages, model)
+def _post_chat_completion(payload: Dict[str, object]) -> str:
 	logger.debug("Sending payload to OpenRouter: %s", payload)
 	try:
 		response = requests.post(
@@ -70,3 +79,35 @@ def generate_response(messages: List[Dict[str, str]], *, model: Optional[str] = 
 	except (KeyError, IndexError, TypeError) as exc:
 		logger.error("Malformed OpenRouter response: %s", data)
 		raise OpenRouterError("OpenRouter response missing message content") from exc
+
+
+def _load_json_file(path: Path) -> Dict[str, Any]:
+	try:
+		return json.loads(path.read_text(encoding="utf-8"))
+	except FileNotFoundError as exc:
+		raise OpenRouterError(f"Required JSON file not found: {path}") from exc
+	except json.JSONDecodeError as exc:
+		raise OpenRouterError(f"Invalid JSON in file: {path}") from exc
+
+
+def generate_response(messages: List[Dict[str, str]], *, model: Optional[str] = None) -> str:
+	"""Send the chat history to OpenRouter and return the assistant reply."""
+	payload = _build_payload(messages, model)
+	return _post_chat_completion(payload)
+
+
+def generate_reflection_response(
+	messages: List[Dict[str, str]],
+	*,
+	model: Optional[str] = None,
+	response_format_path: Optional[Path] = None,
+) -> str:
+	"""Run the reflection query with a strict JSON schema response format.
+
+	This is intended for the "2nd reflection" call where we want to enforce
+	structured JSON output via the `response_format` request parameter.
+	"""
+	path = response_format_path or (DATA_DIR / "reflection_response_format.json")
+	response_format = _load_json_file(path)
+	payload = _build_payload(messages, model, response_format=response_format)
+	return _post_chat_completion(payload)

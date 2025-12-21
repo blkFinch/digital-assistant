@@ -1,0 +1,56 @@
+{
+    "type": "json_schema",
+    "json_schema": {
+        "name": "reflection_memory_update",
+        "strict": true,
+        "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "candidates": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["preference", "relationship", "boundary", "identity", "habit", "skill"]
+                            },
+                            "subject": {
+                                "type": "string",
+                                "enum": ["user", "assistant", "other"]
+                            },
+                            "content": { "type": "string" },
+                            "confidence": { "type": "number" },
+                            "reason": { "type": "string" },
+                            "action": {
+                                "type": "string",
+                                "enum": ["create", "reinforce"]
+                            }
+                        },
+                        "required": ["type", "subject", "content", "confidence", "reason", "action"]
+                    }
+                },
+                "revisions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "target_id": { "type": "string" },
+                            "action": {
+                                "type": "string",
+                                "enum": ["decrease_confidence", "increase_confidence", "revise"]
+                            },
+                            "new_confidence": { "type": "number" },
+                            "reason": { "type": "string" }
+                        },
+                        "required": ["target_id", "action", "new_confidence", "reason"]
+                    }
+                }
+            },
+            "required": ["candidates", "revisions"]
+        }
+    }
+}
