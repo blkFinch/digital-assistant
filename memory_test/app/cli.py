@@ -18,6 +18,11 @@ def build_parser() -> argparse.ArgumentParser:
 		dest="input_text",
 		help="prompt string for the assistant",
 	)
+	parser.add_argument(
+		"--session",
+		dest="session_id",
+		help="use a specific session id instead of the latest one",
+	)
 	return parser
 
 
@@ -30,6 +35,7 @@ def main() -> None:
 
 	response = runner.run_agent(
 		new_session=args.new_session,
+		session_id=args.session_id,
 		user_input=args.input_text,
 	)
 	print(response)

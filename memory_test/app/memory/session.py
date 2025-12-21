@@ -105,3 +105,9 @@ def load_latest_session() -> Optional[Session]:
 	if not files:
 		return None
 	return load_session(files[-1])
+
+def load_session_by_id(session_id: str) -> Optional[Session]:
+    path = _session_path(session_id)
+    if not path.exists():
+        return None
+    return load_session(path)

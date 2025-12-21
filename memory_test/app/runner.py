@@ -1,16 +1,23 @@
 from datetime import datetime
+from typing import Optional
+
 from .memory import session as session_module
 
-def get_session(new_session: bool) -> session_module.Session:
-	if new_session:
-		session = session_module.create_new_session()
-		return session
 
-	session = session_module.load_latest_session()
+def get_session(new_session: bool, session_id: Optional[str]) -> session_module.Session:
+	if new_session:
+		return session_module.create_new_session()
+
+	session = None
+	if session_id:
+		session = session_module.load_session_by_id(session_id)
+
+	if session is None:
+		session = session_module.load_latest_session()
 
 	if session is None:
 		session = session_module.create_new_session()
-		
+
 	return session
 
 def get_output() -> str:
@@ -21,9 +28,9 @@ def append_messages_and_save(session: session_module.Session, user_input: str, o
 	session_module.append_assistant_message(session, output)
 	session_module.save_session(session)
 
-def run_agent(*, new_session: bool, user_input: str) -> str:
+def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) -> str:
 	# loads or creates session -- created sessions are empty until user input is added
-	current_session = get_session(new_session)
+	current_session = get_session(new_session, session_id)
 	
 	# placeholder for LLM + memory logic
 	output = get_output()
