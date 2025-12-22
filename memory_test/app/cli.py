@@ -4,6 +4,7 @@ import sys
 
 from . import runner
 from .logger import configure_logging
+from .prompt_dumper import configure_prompt_dumper
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +37,7 @@ def main() -> None:
 	parser = build_parser()
 	args = parser.parse_args()
 	configure_logging(debug=args.debug)
+	configure_prompt_dumper(debug=args.debug)
 	if not args.input_text:
 		print("Please provide input using -i/--input.")
 		sys.exit(1)

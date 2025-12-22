@@ -3,12 +3,14 @@ from datetime import datetime
 from typing import Any, Optional
 from .config import LOGS_DIR, MIN_MEMORY_CONFIDENCE
 from .logger import get_logger
+from .prompt_dumper import get_prompt_dumper
 from .memory import memory_system
 from .memory import session as session_module
 from .llm import llm_router
 from .llm import prompts as prompt_module
 
 logger = get_logger(__name__)
+dumper = get_prompt_dumper()
 
 # SESSION MANAGEMENT
 def get_session(new_session: bool, session_id: Optional[str]) -> session_module.Session:
@@ -54,12 +56,7 @@ def handle_reflection(session: session_module.Session) -> None:
 		return False
 	
 	logger.debug("Constructed reflection prompt: %s", reflection_prompt)
-	_dump_latest_prompt(
-		LOGS_DIR / "latest_reflection_prompt.txt",
-		"latest_reflection_prompt",
-		reflection_prompt,
-		session_id=session.session_id,
-	)
+	dumper.dump_reflection_prompt(reflection_prompt, session_id=session.session_id)
 
 	# Call LLM for reflection
 	try:		
@@ -81,29 +78,6 @@ def handle_reflection(session: session_module.Session) -> None:
 	logger.debug("Gated reflection output: %s", json.dumps(gated_payload, indent=2))
 	apply_memory_updates(gated_payload, session_id=session.session_id)
 	return
-
-
-def _dump_latest_prompt(path, label: str, messages: list, *, session_id: Optional[str]) -> None:
-	try:
-		LOGS_DIR.mkdir(parents=True, exist_ok=True)
-		lines: list[str] = []
-		lines.append(f"# label: {label}")
-		lines.append(f"# ts: {datetime.utcnow().isoformat()}Z")
-		if session_id:
-			lines.append(f"# session_id: {session_id}")
-		lines.append(f"# messages: {len(messages)}")
-		lines.append("")
-		for i, msg in enumerate(messages):
-			role = msg.get("role", "") if isinstance(msg, dict) else ""
-			content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
-			lines.append(f"[{i}] role={role}")
-			lines.append("-----")
-			lines.append(content)
-			lines.append("=====")
-		path.write_text("\n".join(lines), encoding="utf-8")
-	except Exception as exc:
-		logger.warning("Failed to write prompt dump %s: %s", path, exc)
-
 # MEMORY MANAGEMENT
 def gate_memory_updates(payload: dict) -> dict:
 	"""Filter reflection candidates before applying to long-term memory.
@@ -172,12 +146,7 @@ def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) 
 		prompt = prompt_module.construct_prompt(current_session, user_input)
 		logger.info("Constructed prompt with %d messages", len(prompt))
 		logger.debug("Prompt messages: %s", prompt)
-		_dump_latest_prompt(
-			LOGS_DIR / "latest_prompt.txt",
-			"latest_prompt",
-			prompt,
-			session_id=current_session.session_id,
-		)
+		dumper.dump_prompt(prompt, session_id=current_session.session_id)
 	except Exception as exc:
 		logger.error("Failed to construct prompt: %s", exc)
 		return fallback_response(f"Prompt error: {exc}")
