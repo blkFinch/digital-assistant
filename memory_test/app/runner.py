@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional, TypeVar
 from .config import MIN_MEMORY_CONFIDENCE
 from .utils.logger import get_logger
 from .utils.prompt_dumper import get_prompt_dumper
@@ -12,7 +12,47 @@ from .llm import prompts as prompt_module
 logger = get_logger(__name__)
 dumper = get_prompt_dumper()
 
+T = TypeVar("T")
+
+
+# ERROR HANDLING UTILITIES
+class FatalStepError(Exception):
+    def __init__(self, user_message: str):
+        super().__init__(user_message)
+        self.user_message = user_message
+
+
+def _fatal_step(label: str, fn: Callable[[], T], *, fallback_prefix: str) -> T:
+    try:
+        return fn()
+    except llm_router.OpenRouterError as exc:
+        logger.error("%s failed request: %s", label, exc)
+        raise FatalStepError(f"{fallback_prefix}: {exc}") from exc
+    except Exception as exc:
+        logger.error("%s failed: %s", label, exc)
+        raise FatalStepError(f"{fallback_prefix}: {exc}") from exc
+
+
+
+def _nonfatal_step(label: str, fn: Callable[[], None]) -> None:
+	"""Run a step that should not fail the main response."""
+	try:
+		fn()
+	except json.JSONDecodeError as exc:
+		logger.warning("%s skipped: invalid JSON (%s)", label, exc)
+	except llm_router.OpenRouterError as exc:
+		logger.warning("%s skipped: %s", label, exc)
+	except FileNotFoundError as exc:
+		logger.warning("%s skipped: %s", label, exc)
+	except Exception as exc:
+		logger.warning("%s failed: %s", label, exc)
+
+def fallback_response(reason: str) -> str:
+	logger.warning("Falling back to default response: %s", reason)
+	return datetime.now().strftime("Assistant response at %Y-%m-%d %H:%M:%S")
+
 # SESSION MANAGEMENT
+
 def _get_session(new_session: bool, session_id: Optional[str]) -> session_module.Session:
 	if new_session: # create a new session
 		logger.info("Starting new session")
@@ -37,43 +77,37 @@ def _get_session(new_session: bool, session_id: Optional[str]) -> session_module
 
 	return session
 
-def fallback_response(reason: str) -> str:
-	logger.warning("Falling back to default response: %s", reason)
-	return datetime.now().strftime("Assistant response at %Y-%m-%d %H:%M:%S")
-
 def _append_messages_and_save(session: session_module.Session, user_input: str, output: str) -> None:
 	session_module.append_user_message(session, user_input)
 	session_module.append_assistant_message(session, output)
 	session_module.save_session(session)
+	logger.info("Recorded turn for session %s", session.session_id)
+	
 
+# PROMPT CONSTRUCTION
+
+def _build_prompt(current_session: session_module.Session, user_input: str) -> list[dict[str, str]]:
+	prompt = prompt_module.construct_prompt(current_session, user_input)
+	logger.info("Constructed prompt with %d messages", len(prompt))
+	logger.debug("Prompt messages: %s", prompt)
+	dumper.dump_prompt(prompt, session_id=current_session.session_id)
+	return prompt
+
+	
 # REFLECTION HANDLING
 
 def _handle_reflection(session: session_module.Session) -> None:
 	reflection_prompt = prompt_module.construct_reflection_prompt(session)
 
-	if reflection_prompt is None:
-		logger.error(
-			"Failed to construct reflection prompt; skipping reflection (check reflection prompt file)"
-		)
-		return
-	
 	logger.debug("Constructed reflection prompt: %s", reflection_prompt)
 	dumper.dump_reflection_prompt(reflection_prompt, session_id=session.session_id)
 
 	# Call LLM for reflection
-	try:		
-		reflection_output = llm_router.generate_reflection_response(reflection_prompt)
-		logger.info("Received reflection response from OpenRouter")
-		logger.debug("Reflection output: %s", reflection_output)
-	except llm_router.OpenRouterError as exc:
-		logger.error("Reflection request failed: %s", exc)
-		return
+	reflection_output = llm_router.generate_reflection_response(reflection_prompt)
+	logger.info("Received reflection response from OpenRouter")
+	logger.debug("Reflection output: %s", reflection_output)
 	
-	try:
-		payload = json.loads(reflection_output)
-	except json.JSONDecodeError as exc:
-		logger.error("Reflection output was not valid JSON: %s", exc)
-		return
+	payload = json.loads(reflection_output)
 	
 	# Gate memory updates and apply to long-term memory
 	gated_payload, gate_stats = memory_system.gate_memory_updates(
@@ -88,61 +122,40 @@ def _handle_reflection(session: session_module.Session) -> None:
 			MIN_MEMORY_CONFIDENCE,
 		)
 	logger.debug("Gated reflection output: %s", json.dumps(gated_payload, indent=2))
-	_apply_memory_updates(gated_payload, session_id=session.session_id)
+	memory_system.apply_memory_updates(gated_payload, source_session_id=session.session_id)
 	return
 
-def _apply_memory_updates(payload: dict, *, session_id: Optional[str] = None) -> None:
-	"""Apply approved memory updates to long-term memory (persisted in ltm.json)."""
-	if not isinstance(payload, dict):
-		logger.warning("Cannot apply memory updates: expected JSON object")
-		return
-
-	items = memory_system.apply_memory_updates(payload, source_session_id=session_id)
-	logger.info("Long-term memory now has %d items", len(items))
-
 ## RUNNER FUNCTION
+
 def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) -> str:
+    try:
+        # 1) Load/create session
+        current_session = _fatal_step(
+            "Session init",
+            lambda: _get_session(new_session, session_id),
+            fallback_prefix="Session error",
+        )
 
-	# LOAD OR CREATE SESSION
-	try:
-		# loads or creates session -- created sessions are empty until user input is added
-		current_session = _get_session(new_session, session_id)
-	except Exception as exc:
-		logger.error("Failed to get or create session: %s", exc)
-		return fallback_response(f"Session error: {exc}")
+        # 2) Construct prompt
+        prompt = _fatal_step(
+            "Prompt construction",
+            lambda: _build_prompt(current_session, user_input),
+            fallback_prefix="Prompt error",
+        )
 
-	# CONSTRUCT PROMPT
-	try:
-		prompt = prompt_module.construct_prompt(current_session, user_input)
-		logger.info("Constructed prompt with %d messages", len(prompt))
-		logger.debug("Prompt messages: %s", prompt)
-		dumper.dump_prompt(prompt, session_id=current_session.session_id)
-	except Exception as exc:
-		logger.error("Failed to construct prompt: %s", exc)
-		return fallback_response(f"Prompt error: {exc}")
-	
-	# CALL LLM FOR RESPONSE
-	try:
-		output = llm_router.generate_response(prompt)
-		logger.info("Received response from OpenRouter")
-	except llm_router.OpenRouterError as exc:
-		logger.error("Chat completion request failed: %s", exc)
-		return fallback_response(f"LLM error: {exc}")
+        # 3) Call LLM for response
+        output = _fatal_step(
+            "LLM response",
+            lambda: llm_router.generate_response(prompt),
+            fallback_prefix="LLM error",
+        )
 
-	# APPEND MESSAGES AND SAVE SESSION
-	try:
-		_append_messages_and_save(current_session, user_input, output)
-		# keeping this atomic so that messages are only saved if both user and assistant messages are added
-		logger.info("Recorded turn for session %s", current_session.session_id)
-	except Exception as exc:
-		logger.warning("Failed to append messages and save session %s: %s", current_session.session_id, exc)
-		return output  # still return the output even if saving failed
-	
-	# HANDLE REFLECTION
-	try:
-		_handle_reflection(current_session)
-	except Exception as exc:
-		logger.warning("Failed to handle reflection for session %s: %s", current_session.session_id, exc)
-	# continuing without reflection but no memory updates applied
+    except FatalStepError as exc:
+        # Single place where you decide what user sees
+        return fallback_response(exc.user_message)
 
-	return output
+    # 4) Non-fatal Save turn and reflection
+    _nonfatal_step("Save turn", lambda: _append_messages_and_save(current_session, user_input, output))
+    _nonfatal_step("Reflection", lambda: _handle_reflection(current_session))
+
+    return output

@@ -110,7 +110,7 @@ def construct_prompt(session, user_input: str) -> list:
 	return [system_message] + recent_messages + [{"role": "user", "content": user_input}]
 
 
-def construct_reflection_prompt(session) -> Optional[list]:
+def construct_reflection_prompt(session) -> list:
 	"""Build the reflection prompt used to propose long-term memory updates."""
 	recent_messages = (
 		session.messages[-REFLECTION_MESSAGE_LIMIT:]
@@ -126,7 +126,7 @@ def construct_reflection_prompt(session) -> Optional[list]:
 	)
 
 	if not REFLECTION_PROMPT_PATH.exists():
-		return None
+		raise FileNotFoundError(f"Reflection prompt file not found: {REFLECTION_PROMPT_PATH}")
 
 	reflection_prompt_text = REFLECTION_PROMPT_PATH.read_text(encoding="utf-8")
 	return [
