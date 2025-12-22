@@ -4,12 +4,56 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import REVISION_LOG_PATH, SESSIONS_DIR
 
 
 LTM_PATH = SESSIONS_DIR / "ltm.json"
+
+
+def gate_memory_updates(
+	payload: Dict[str, Any],
+	*,
+	min_confidence: float,
+) -> Tuple[Dict[str, Any], Dict[str, int]]:
+	"""Filter reflection candidates before applying to long-term memory.
+
+	This is intentionally pure (no logging) so callers can decide how to report.
+
+	Returns:
+	- gated_payload: the updated payload with candidates filtered
+	- stats: {"kept": int, "removed": int}
+	"""
+	stats = {"kept": 0, "removed": 0}
+	if not isinstance(payload, dict):
+		return payload, stats
+
+	candidates = payload.get("candidates", [])
+	if not isinstance(candidates, list):
+		return payload, stats
+
+	kept: List[Dict[str, Any]] = []
+	removed = 0
+	for candidate in candidates:
+		if not isinstance(candidate, dict):
+			removed += 1
+			continue
+		confidence = candidate.get("confidence", 0.0)
+		try:
+			confidence_value = float(confidence)
+		except (TypeError, ValueError):
+			removed += 1
+			continue
+		if confidence_value >= min_confidence:
+			kept.append(candidate)
+		else:
+			removed += 1
+
+	payload["candidates"] = kept
+	stats["kept"] = len(kept)
+	stats["removed"] = removed
+	return payload, stats
 
 
 def _now_iso() -> str:
