@@ -9,10 +9,14 @@ load_dotenv()
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
+LOGS_DIR = ROOT_DIR / "logs"
 PERSONALITY_PATH = DATA_DIR / "personality.md"
 REFLECTION_PROMPT_PATH = DATA_DIR / "reflection_prompt.txt"
 PROMPT_MESSAGE_LIMIT = int(os.getenv("PROMPT_MESSAGE_LIMIT", "15"))
 REFLECTION_MESSAGE_LIMIT = int(os.getenv("REFLECTION_MESSAGE_LIMIT", "10"))
+
+# Debugging / audit
+REVISION_LOG_PATH = SESSIONS_DIR / "revision_log.jsonl"
 
 # Memory gating
 MIN_MEMORY_CONFIDENCE = float(os.getenv("MIN_MEMORY_CONFIDENCE", "0.4"))

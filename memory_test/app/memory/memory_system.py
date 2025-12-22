@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..config import SESSIONS_DIR
+from ..config import REVISION_LOG_PATH, SESSIONS_DIR
 
 
 LTM_PATH = SESSIONS_DIR / "ltm.json"
@@ -19,6 +19,17 @@ def _now_iso() -> str:
 def _new_memory_id() -> str:
 	# Collision-resistant enough for local use; lexicographically sortable.
 	return f"mem_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ%f')}"
+
+
+def _new_event_id() -> str:
+	return f"evt_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ%f')}"
+
+
+def _append_revision_log(entry: Dict[str, Any]) -> None:
+	REVISION_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+	with REVISION_LOG_PATH.open("a", encoding="utf-8", newline="\n") as f:
+		f.write(json.dumps(entry, ensure_ascii=False))
+		f.write("\n")
 
 
 @dataclass
@@ -83,6 +94,7 @@ def apply_memory_updates(
 	updates: Dict[str, Any],
 	*,
 	path: Optional[Path] = None,
+	source_session_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
 	"""Apply reflection candidates + revisions into LTM and persist.
 
@@ -95,6 +107,7 @@ def apply_memory_updates(
 	items = load_ltm(path)
 	idx = _index_by_id(items)
 	changed = False
+	log_entries: List[Dict[str, Any]] = []
 
 	candidates = updates.get("candidates", [])
 	if isinstance(candidates, list):
@@ -112,8 +125,9 @@ def apply_memory_updates(
 				confidence = 0.0
 
 			if action == "create":
+				created_id = _new_memory_id()
 				mem = MemoryItem(
-					id=_new_memory_id(),
+					id=created_id,
 					type=cand_type,
 					subject=subject,
 					content=content,
@@ -124,6 +138,28 @@ def apply_memory_updates(
 					strength=1,
 				)
 				items.append(mem.to_dict())
+				log_entries.append(
+					{
+						"ts": _now_iso(),
+						"event_id": _new_event_id(),
+						"source": {
+							"source_session_id": source_session_id,
+							"source_stage": "reflection_apply",
+						},
+						"action": "create",
+						"target_id": created_id,
+						"before": None,
+						"after": {
+							"type": cand_type,
+							"subject": subject,
+							"content": content,
+							"confidence": confidence,
+							"strength": 1,
+						},
+						"reason": reason,
+						"candidate_confidence": confidence,
+					}
+				)
 				changed = True
 			elif action == "reinforce":
 				# Best-effort: reinforce the first matching item (same type/subject/content).
@@ -140,8 +176,9 @@ def apply_memory_updates(
 						break
 				if matched_i is None:
 					# If no match, create a new item (still gives it an ID for future revisions).
+					created_id = _new_memory_id()
 					mem = MemoryItem(
-						id=_new_memory_id(),
+						id=created_id,
 						type=cand_type,
 						subject=subject,
 						content=content,
@@ -152,9 +189,38 @@ def apply_memory_updates(
 						strength=1,
 					)
 					items.append(mem.to_dict())
+					log_entries.append(
+						{
+							"ts": _now_iso(),
+							"event_id": _new_event_id(),
+							"source": {
+								"source_session_id": source_session_id,
+								"source_stage": "reflection_apply",
+							},
+							"action": "reinforce",
+							"match": {
+								"strategy": "exact_type_subject_content",
+								"matched": False,
+							},
+							"target_id": created_id,
+							"before": None,
+							"after": {
+								"type": cand_type,
+								"subject": subject,
+								"content": content,
+								"confidence": confidence,
+								"strength": 1,
+							},
+							"reason": reason,
+							"candidate_confidence": confidence,
+						}
+					)
 					changed = True
 				else:
 					existing = items[matched_i]
+					existing_id = str(existing.get("id", ""))
+					before_confidence = existing.get("confidence")
+					before_strength = existing.get("strength")
 					try:
 						existing_strength = int(existing.get("strength", 1))
 					except (TypeError, ValueError):
@@ -168,6 +234,33 @@ def apply_memory_updates(
 						existing_conf = 0.0
 					if confidence > existing_conf:
 						existing["confidence"] = confidence
+					log_entries.append(
+						{
+							"ts": _now_iso(),
+							"event_id": _new_event_id(),
+							"source": {
+								"source_session_id": source_session_id,
+								"source_stage": "reflection_apply",
+							},
+							"action": "reinforce",
+							"match": {
+								"strategy": "exact_type_subject_content",
+								"matched": True,
+							},
+							"target_id": existing_id,
+							"before": {
+								"confidence": before_confidence,
+								"strength": before_strength,
+							},
+							"after": {
+								"confidence": existing.get("confidence"),
+								"strength": existing.get("strength"),
+								"last_updated": existing.get("last_updated"),
+							},
+							"reason": reason,
+							"candidate_confidence": confidence,
+						}
+					)
 					changed = True
 
 	revisions = updates.get("revisions", [])
@@ -187,17 +280,61 @@ def apply_memory_updates(
 			except (TypeError, ValueError):
 				continue
 			if action in {"decrease_confidence", "increase_confidence"}:
+				before_confidence = item.get("confidence")
 				item["confidence"] = new_conf
 				item["last_updated"] = _now_iso()
+				log_entries.append(
+					{
+						"ts": _now_iso(),
+						"event_id": _new_event_id(),
+						"source": {
+							"source_session_id": source_session_id,
+							"source_stage": "reflection_apply",
+						},
+						"action": action,
+						"target_id": target_id,
+						"before": {"confidence": before_confidence},
+						"after": {
+							"confidence": new_conf,
+							"last_updated": item.get("last_updated"),
+						},
+						"reason": str(rev.get("reason", "")),
+						"new_confidence": new_conf,
+					}
+				)
 				changed = True
 			elif action == "revise":
 				# Optional: allow a content revision if provided.
+				before_confidence = item.get("confidence")
+				before_content = item.get("content")
 				if isinstance(rev.get("content"), str):
 					item["content"] = rev["content"]
 				item["confidence"] = new_conf
 				item["last_updated"] = _now_iso()
+				log_entries.append(
+					{
+						"ts": _now_iso(),
+						"event_id": _new_event_id(),
+						"source": {
+							"source_session_id": source_session_id,
+							"source_stage": "reflection_apply",
+						},
+						"action": "revise",
+						"target_id": target_id,
+						"before": {"confidence": before_confidence, "content": before_content},
+						"after": {
+							"confidence": new_conf,
+							"content": item.get("content"),
+							"last_updated": item.get("last_updated"),
+						},
+						"reason": str(rev.get("reason", "")),
+						"new_confidence": new_conf,
+					}
+				)
 				changed = True
 
 	if changed:
 		save_ltm(items, path)
+		for entry in log_entries:
+			_append_revision_log(entry)
 	return items

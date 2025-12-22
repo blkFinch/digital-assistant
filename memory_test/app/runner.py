@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import Any, Optional
-from .config import MIN_MEMORY_CONFIDENCE
+from .config import LOGS_DIR, MIN_MEMORY_CONFIDENCE
 from .logger import get_logger
 from .memory import memory_system
 from .memory import session as session_module
@@ -54,6 +54,12 @@ def handle_reflection(session: session_module.Session) -> None:
 		return
 	
 	logger.debug("Constructed reflection prompt: %s", reflection_prompt)
+	_dump_latest_prompt(
+		LOGS_DIR / "latest_reflection_prompt.txt",
+		"latest_reflection_prompt",
+		reflection_prompt,
+		session_id=session.session_id,
+	)
 
 	# Call LLM for reflection
 	try:		
@@ -67,8 +73,30 @@ def handle_reflection(session: session_module.Session) -> None:
 	# Gate memory updates and apply to long-term memory
 	gated_reflection_output = gate_memory_updates(reflection_output)
 	logger.debug("Gated reflection output: %s", gated_reflection_output)
-	apply_memory_updates(gated_reflection_output)
+	apply_memory_updates(gated_reflection_output, session_id=session.session_id)
 	return
+
+
+def _dump_latest_prompt(path, label: str, messages: list, *, session_id: Optional[str]) -> None:
+	try:
+		LOGS_DIR.mkdir(parents=True, exist_ok=True)
+		lines: list[str] = []
+		lines.append(f"# label: {label}")
+		lines.append(f"# ts: {datetime.utcnow().isoformat()}Z")
+		if session_id:
+			lines.append(f"# session_id: {session_id}")
+		lines.append(f"# messages: {len(messages)}")
+		lines.append("")
+		for i, msg in enumerate(messages):
+			role = msg.get("role", "") if isinstance(msg, dict) else ""
+			content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+			lines.append(f"[{i}] role={role}")
+			lines.append("-----")
+			lines.append(content)
+			lines.append("=====")
+		path.write_text("\n".join(lines), encoding="utf-8")
+	except Exception as exc:
+		logger.warning("Failed to write prompt dump %s: %s", path, exc)
 
 # MEMORY MANAGEMENT
 def gate_memory_updates(candidates_json: str) -> str:
@@ -119,7 +147,7 @@ def gate_memory_updates(candidates_json: str) -> str:
 	payload["candidates"] = kept
 	return json.dumps(payload, ensure_ascii=False)
 
-def apply_memory_updates(updates_json: str) -> None:
+def apply_memory_updates(updates_json: str, *, session_id: Optional[str] = None) -> None:
 	"""Apply approved memory updates to long-term memory (persisted in ltm.json)."""
 	try:
 		payload: Any = json.loads(updates_json)
@@ -131,7 +159,7 @@ def apply_memory_updates(updates_json: str) -> None:
 		logger.warning("Cannot apply memory updates: expected JSON object")
 		return
 
-	items = memory_system.apply_memory_updates(payload)
+	items = memory_system.apply_memory_updates(payload, source_session_id=session_id)
 	logger.info("Long-term memory now has %d items", len(items))
 
 ## RUNNER FUNCTION
@@ -142,6 +170,12 @@ def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) 
 	prompt = prompt_module.construct_prompt(current_session, user_input)
 	logger.info("Constructed prompt with %d messages", len(prompt))
 	logger.debug("Prompt messages: %s", prompt)
+	_dump_latest_prompt(
+		LOGS_DIR / "latest_prompt.txt",
+		"latest_prompt",
+		prompt,
+		session_id=current_session.session_id,
+	)
 	
 	try:
 		output = llm_router.generate_response(prompt)
