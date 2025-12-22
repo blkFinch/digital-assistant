@@ -3,8 +3,8 @@ import argparse
 import sys
 
 from . import runner
-from .logger import configure_logging
-from .prompt_dumper import configure_prompt_dumper
+from .utils.logger import configure_logging
+from .utils.prompt_dumper import configure_prompt_dumper
 
 
 def build_parser() -> argparse.ArgumentParser:

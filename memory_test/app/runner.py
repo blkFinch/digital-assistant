@@ -2,8 +2,8 @@ import json
 from datetime import datetime
 from typing import Any, Optional
 from .config import LOGS_DIR, MIN_MEMORY_CONFIDENCE
-from .logger import get_logger
-from .prompt_dumper import get_prompt_dumper
+from .utils.logger import get_logger
+from .utils.prompt_dumper import get_prompt_dumper
 from .memory import memory_system
 from .memory import session as session_module
 from .llm import llm_router
