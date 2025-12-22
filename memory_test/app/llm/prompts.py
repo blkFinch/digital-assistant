@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..config import (
+	MIN_MEMORY_CONFIDENCE,
 	PERSONALITY_PATH,
 	PROMPT_MESSAGE_LIMIT,
 	REFLECTION_MESSAGE_LIMIT,
@@ -41,6 +42,13 @@ def get_memory_block() -> str:
 
 	lines: list[str] = ["MEMORY:"]
 	for item in sorted_items:
+		try:
+			confidence = float(item.get("confidence", 0.0))
+		except (TypeError, ValueError):
+			confidence = 0.0
+		if confidence < MIN_MEMORY_CONFIDENCE:
+			continue
+
 		subject = str(item.get("subject", "")).strip() or "unknown"
 		mem_type = str(item.get("type", "")).strip() or "unknown"
 		content = str(item.get("content", "")).strip()
