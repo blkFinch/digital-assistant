@@ -77,7 +77,10 @@ def append_assistant_message(session: Session, text: str) -> None:
 
 def save_session(session: Session) -> Path:
 	path = session.file_path or _session_path(session.session_id)
-	path.write_text(json.dumps(session.to_dict(), indent=2))
+	try:
+		path.write_text(json.dumps(session.to_dict(), indent=2))
+	except Exception as e:
+		raise RuntimeError(f"Failed to save session {session.session_id}: {e}") from e
 	session.file_path = path
 	return path
 

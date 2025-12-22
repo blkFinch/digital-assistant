@@ -51,7 +51,7 @@ def handle_reflection(session: session_module.Session) -> None:
 
 	if reflection_prompt is None:
 		logger.error("Failed to construct reflection prompt")
-		return
+		return False
 	
 	logger.debug("Constructed reflection prompt: %s", reflection_prompt)
 	_dump_latest_prompt(
@@ -70,10 +70,16 @@ def handle_reflection(session: session_module.Session) -> None:
 		logger.error("Reflection request failed: %s", exc)
 		return
 	
+	try:
+		payload = json.loads(reflection_output)
+	except json.JSONDecodeError as exc:
+		logger.error("Reflection output was not valid JSON: %s", exc)
+		return
+	
 	# Gate memory updates and apply to long-term memory
-	gated_reflection_output = gate_memory_updates(reflection_output)
-	logger.debug("Gated reflection output: %s", gated_reflection_output)
-	apply_memory_updates(gated_reflection_output, session_id=session.session_id)
+	gated_payload = gate_memory_updates(payload)
+	logger.debug("Gated reflection output: %s", json.dumps(gated_payload, indent=2))
+	apply_memory_updates(gated_payload, session_id=session.session_id)
 	return
 
 
@@ -99,25 +105,19 @@ def _dump_latest_prompt(path, label: str, messages: list, *, session_id: Optiona
 		logger.warning("Failed to write prompt dump %s: %s", path, exc)
 
 # MEMORY MANAGEMENT
-def gate_memory_updates(candidates_json: str) -> str:
+def gate_memory_updates(payload: dict) -> dict:
 	"""Filter reflection candidates before applying to long-term memory.
 
 	Currently, we drop any candidate with confidence < MIN_MEMORY_CONFIDENCE.
 	"""
-	try:
-		payload: Any = json.loads(candidates_json)
-	except json.JSONDecodeError:
-		logger.warning("Reflection output was not valid JSON; skipping gating")
-		return candidates_json
-
 	if not isinstance(payload, dict):
 		logger.warning("Reflection output JSON was not an object; skipping gating")
-		return candidates_json
+		return payload
 
 	candidates = payload.get("candidates", [])
 	if not isinstance(candidates, list):
 		logger.warning("Reflection output 'candidates' was not a list; skipping gating")
-		return candidates_json
+		return payload
 
 	kept: list[dict[str, Any]] = []
 	removed = 0
@@ -145,16 +145,10 @@ def gate_memory_updates(candidates_json: str) -> str:
 		)
 
 	payload["candidates"] = kept
-	return json.dumps(payload, ensure_ascii=False)
+	return payload
 
-def apply_memory_updates(updates_json: str, *, session_id: Optional[str] = None) -> None:
+def apply_memory_updates(payload: dict, *, session_id: Optional[str] = None) -> None:
 	"""Apply approved memory updates to long-term memory (persisted in ltm.json)."""
-	try:
-		payload: Any = json.loads(updates_json)
-	except json.JSONDecodeError:
-		logger.warning("Cannot apply memory updates: output was not valid JSON")
-		return
-
 	if not isinstance(payload, dict):
 		logger.warning("Cannot apply memory updates: expected JSON object")
 		return
@@ -164,28 +158,52 @@ def apply_memory_updates(updates_json: str, *, session_id: Optional[str] = None)
 
 ## RUNNER FUNCTION
 def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) -> str:
-	# loads or creates session -- created sessions are empty until user input is added
-	current_session = get_session(new_session, session_id)
 
-	prompt = prompt_module.construct_prompt(current_session, user_input)
-	logger.info("Constructed prompt with %d messages", len(prompt))
-	logger.debug("Prompt messages: %s", prompt)
-	_dump_latest_prompt(
-		LOGS_DIR / "latest_prompt.txt",
-		"latest_prompt",
-		prompt,
-		session_id=current_session.session_id,
-	)
+	# LOAD OR CREATE SESSION
+	try:
+		# loads or creates session -- created sessions are empty until user input is added
+		current_session = get_session(new_session, session_id)
+	except Exception as exc:
+		logger.error("Failed to get or create session: %s", exc)
+		return fallback_response(f"Session error: {exc}")
+
+	# CONSTRUCT PROMPT
+	try:
+		prompt = prompt_module.construct_prompt(current_session, user_input)
+		logger.info("Constructed prompt with %d messages", len(prompt))
+		logger.debug("Prompt messages: %s", prompt)
+		_dump_latest_prompt(
+			LOGS_DIR / "latest_prompt.txt",
+			"latest_prompt",
+			prompt,
+			session_id=current_session.session_id,
+		)
+	except Exception as exc:
+		logger.error("Failed to construct prompt: %s", exc)
+		return fallback_response(f"Prompt error: {exc}")
 	
+	# CALL LLM FOR RESPONSE
 	try:
 		output = llm_router.generate_response(prompt)
 		logger.info("Received response from OpenRouter")
-		append_messages_and_save(current_session, user_input, output)
-		handle_reflection(current_session)
 	except llm_router.OpenRouterError as exc:
-		output = fallback_response(str(exc))
+		logger.error("Chat completion request failed: %s", exc)
+		return fallback_response(f"LLM error: {exc}")
 
-	# keeping this atomic so that messages are only saved if both user and assistant messages are added
-	logger.info("Recorded turn for session %s", current_session.session_id)
+	# APPEND MESSAGES AND SAVE SESSION
+	try:
+		append_messages_and_save(current_session, user_input, output)
+		# keeping this atomic so that messages are only saved if both user and assistant messages are added
+		logger.info("Recorded turn for session %s", current_session.session_id)
+	except Exception as exc:
+		logger.warning("Failed to append messages and save session %s: %s", current_session.session_id, exc)
+		return fallback_response(f"Session save error: {exc}")
+	
+	# HANDLE REFLECTION IN BACKGROUND
+	try:
+		handle_reflection(current_session)
+	except Exception as exc:
+		logger.warning("Failed to handle reflection for session %s: %s", current_session.session_id, exc)
+	# continuing without reflection but no memory updates applied
 
 	return output
