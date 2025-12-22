@@ -15,6 +15,8 @@ from ..config import (
 	REFLECTION_PROMPT_PATH,
 )
 
+from ..memory import memory_system
+
 
 def get_personality() -> str:
 	if PERSONALITY_PATH.exists():
@@ -23,9 +25,68 @@ def get_personality() -> str:
 
 
 def get_memory_block() -> str:
-	# Placeholder until the memory system is wired in.
-	return "MEMORY: none."
+	items = memory_system.load_ltm()
+	if not items:
+		return "MEMORY: none."
 
+	def sort_key(item: dict) -> tuple:
+		# Prefer recently updated memories first.
+		return (str(item.get("last_updated", "")), str(item.get("created_at", "")))
+
+	sorted_items = sorted(
+		[item for item in items if isinstance(item, dict)],
+		key=sort_key,
+		reverse=True,
+	)
+
+	lines: list[str] = ["MEMORY:"]
+	for item in sorted_items:
+		subject = str(item.get("subject", "")).strip() or "unknown"
+		mem_type = str(item.get("type", "")).strip() or "unknown"
+		content = str(item.get("content", "")).strip()
+		if not content:
+			continue
+
+		subject_label = "User" if subject.lower() == "user" else subject.capitalize()
+		lines.append(f"- {subject_label} {mem_type}: {content}")
+
+	# If everything was empty/invalid, fall back.
+	return "\n".join(lines) if len(lines) > 1 else "MEMORY: none."
+
+def get_reflection_memory_block() -> str:
+	items = memory_system.load_ltm()
+	if not items:
+		return "MEMORY: none."
+
+	def sort_key(item: dict) -> tuple:
+		return (str(item.get("last_updated", "")), str(item.get("created_at", "")))
+
+	sorted_items = sorted(
+		[item for item in items if isinstance(item, dict)],
+		key=sort_key,
+		reverse=True,
+	)
+
+	lines: list[str] = ["MEMORY:"]
+	for item in sorted_items:
+		mem_id = str(item.get("id", "")).strip()
+		subject = str(item.get("subject", "")).strip() or "unknown"
+		mem_type = str(item.get("type", "")).strip() or "unknown"
+		content = str(item.get("content", "")).strip()
+		if not content:
+			continue
+
+		try:
+			confidence = float(item.get("confidence", 0.0))
+		except (TypeError, ValueError):
+			confidence = 0.0
+
+		id_part = f"[{mem_id}] " if mem_id else ""
+		lines.append(
+			f"- {id_part}({subject}.{mem_type}, conf={confidence:.1f}) {content}"
+		)
+
+	return "\n".join(lines) if len(lines) > 1 else "MEMORY: none."
 
 def construct_system_message_content() -> str:
 	personality = get_personality()
@@ -52,7 +113,9 @@ def construct_reflection_prompt(session) -> Optional[list]:
 	messages_text = "\n".join(
 		[f"{msg['role'].upper()}: {msg['content']}" for msg in recent_messages]
 	)
-	context_blob = get_memory_block() + "\n\n" + "RECENT MESSAGES:\n\n" + messages_text
+	context_blob = (
+		get_reflection_memory_block() + "\n\n" + "RECENT MESSAGES:\n\n" + messages_text
+	)
 
 	if not REFLECTION_PROMPT_PATH.exists():
 		return None
