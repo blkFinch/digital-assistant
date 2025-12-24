@@ -74,9 +74,16 @@ def get_reflection_memory_block() -> str:
 		key=sort_key,
 		reverse=True,
 	)
+	
+    # Filter items by confidence threshold for now - in future add verbose instructions for fuzzy memories("MAYBE-")
+	filtered_items = [
+        item for item in sorted_items
+        if memory_system._safe_float(item.get("confidence", 0.0)) >= MIN_MEMORY_CONFIDENCE
+    ]
 
 	lines: list[str] = ["MEMORY:"]
-	for item in sorted_items:
+	
+	for item in filtered_items:
 		mem_id = str(item.get("id", "")).strip()
 		subject = str(item.get("subject", "")).strip() or "unknown"
 		mem_type = str(item.get("type", "")).strip() or "unknown"
