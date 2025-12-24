@@ -17,6 +17,7 @@ from ..config import (
 )
 
 from ..memory import memory_system
+from ..memory import session as session_module
 
 
 def get_personality() -> str:
@@ -98,12 +99,39 @@ def construct_system_message_content() -> str:
 	return personality + "\n\n" + memory_block
 
 
+def _construct_screen_context_system_message(session) -> Optional[dict[str, str]]:
+	try:
+		active_ctx = session_module.get_active_screen_context(session)
+	except Exception:
+		return None
+
+	if not active_ctx:
+		return None
+
+	ctx_text = str(active_ctx.get("text", "")).strip()
+	if not ctx_text:
+		return None
+
+	source = str(active_ctx.get("source", "")).strip()
+	created_at = str(active_ctx.get("created_at", "")).strip()
+	meta_parts = [p for p in [source, created_at] if p]
+	meta = f" ({' | '.join(meta_parts)})" if meta_parts else ""
+	return {
+		"role": "system",
+		"content": f"SCREEN CONTEXT (OCR){meta}:\n\n{ctx_text}",
+	}
+
+
 def construct_prompt(session, user_input: str) -> list:
 	"""Build the main chat prompt for the assistant."""
 	system_message = {"role": "system", "content": construct_system_message_content()}
+	screen_context_message = _construct_screen_context_system_message(session)
 	limit = max(PROMPT_MESSAGE_LIMIT, 0)
 	recent_messages = session.messages[-limit:] if limit > 0 else []
-	return [system_message] + recent_messages + [{"role": "user", "content": user_input}]
+	base = [system_message]
+	if screen_context_message:
+		base.append(screen_context_message)
+	return base + recent_messages + [{"role": "user", "content": user_input}]
 
 
 def construct_reflection_prompt(session) -> list:

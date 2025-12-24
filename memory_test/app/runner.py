@@ -86,7 +86,10 @@ def _get_session(new_session: bool, session_id: Optional[str]) -> session_module
 
 	return session
 
-def _append_messages_and_save(session: session_module.Session, user_input: str, output: str) -> None:
+def _append_messages_and_save(session: session_module.Session, user_input: str, output: str, context_added: bool = False) -> None:
+	if context_added:
+		user_input += f"{user_input}\n[system note: fresh screen context was captured for this message]"
+  
 	session_module.append_user_message(session, user_input)
 	session_module.append_assistant_message(session, output)
 	session_module.save_session(session)
