@@ -2,7 +2,7 @@
 .venv/
 __pycache__/
 *.pyc
-memory_test/app/__pycache__/cli.cpython-310.pyc
-memory_test/data/sessions/
+core_agent/app/__pycache__/cli.cpython-310.pyc
+core_agent/data/sessions/
 /logs/*
-memory_test/logs/*
+core_agent/logs/*
