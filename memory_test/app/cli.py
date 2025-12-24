@@ -8,7 +8,7 @@ from .utils.prompt_dumper import configure_prompt_dumper
 
 
 def build_parser() -> argparse.ArgumentParser:
-	parser = argparse.ArgumentParser(prog="memory-agent")
+	parser = argparse.ArgumentParser(prog="vision-agent")
 	parser.add_argument(
 		"--new-session",
 		action="store_true",
@@ -29,6 +29,11 @@ def build_parser() -> argparse.ArgumentParser:
 		"--debug",
 		action="store_true",
 		help="enable verbose logging output",
+	)
+	parser.add_argument(
+		"--context",
+		dest="context",
+		help="capture screen context with the OCR tool",
 	)
 	return parser
 
