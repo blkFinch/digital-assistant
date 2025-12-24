@@ -15,6 +15,8 @@ REFLECTION_PROMPT_PATH = DATA_DIR / "reflection_prompt.txt"
 PROMPT_MESSAGE_LIMIT = int(os.getenv("PROMPT_MESSAGE_LIMIT", "15"))
 REFLECTION_MESSAGE_LIMIT = int(os.getenv("REFLECTION_MESSAGE_LIMIT", "10"))
 
+MAX_SCREEN_CONTEXTS = int(os.getenv("MAX_SCREEN_CONTEXTS", "5"))
+
 # Debugging / audit
 REVISION_LOG_PATH = SESSIONS_DIR / "revision_log.jsonl"
 

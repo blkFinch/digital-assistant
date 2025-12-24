@@ -3,6 +3,7 @@ import argparse
 import sys
 
 from . import runner
+from .runner import RunOptions
 from .utils.logger import configure_logging
 from .utils.prompt_dumper import configure_prompt_dumper
 
@@ -32,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
 	)
 	parser.add_argument(
 		"--context",
-		dest="context",
+		action="store_true",
 		help="capture screen context with the OCR tool",
 	)
 	return parser
@@ -47,11 +48,14 @@ def main() -> None:
 		print("Please provide input using -i/--input.")
 		sys.exit(1)
 
-	response = runner.run_agent(
+	opts = RunOptions(
 		new_session=args.new_session,
 		session_id=args.session_id,
 		user_input=args.input_text,
+		context=args.context,
 	)
+
+	response = runner.run_agent(opts)
 	print(response)
 
 

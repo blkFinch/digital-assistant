@@ -3,12 +3,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, Sequence
+from typing import Sequence
 
 import mss
 from PIL import Image
 import numpy as np
 import easyocr
+
 
 
 @dataclass
@@ -84,3 +85,4 @@ if __name__ == "__main__":
     ctx = capture_and_ocr(engine)
     print(ctx.created_at, ctx.source)
     print(ctx.text[:2000])
+    

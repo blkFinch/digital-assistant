@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from dataclasses import dataclass
 from typing import Callable, Optional, TypeVar
 from .config import MIN_MEMORY_CONFIDENCE
 from .utils.logger import get_logger
@@ -8,11 +9,19 @@ from .memory import memory_system
 from .memory import session as session_module
 from .llm import llm_router
 from .llm import prompts as prompt_module
+from .ocr.ocr_tool import capture_and_ocr, EasyOcrEngine
 
 logger = get_logger(__name__)
 dumper = get_prompt_dumper()
 
 T = TypeVar("T")
+
+@dataclass(frozen=True)
+class RunOptions:
+	new_session: bool = False
+	session_id: Optional[str] = None
+	user_input: str = ""
+	context: bool | None = None
 
 
 # ERROR HANDLING UTILITIES
@@ -125,37 +134,70 @@ def _handle_reflection(session: session_module.Session) -> None:
 	memory_system.apply_memory_updates(gated_payload, source_session_id=session.session_id)
 	return
 
+## SCREEN CAPTURE
+
+def _capture_and_store_screen_context(session: session_module.Session) -> None:
+	"""
+	Capture screen context using OCR tool.
+
+	Raises:
+		RuntimeError: if screen capture or OCR fails.
+	"""
+
+	logger.info("Capturing screen context")
+	try:
+		engine = EasyOcrEngine(languages=["en"], gpu=True)
+	except Exception:
+		logger.info("EasyOCR GPU init failed; retrying with gpu=False")
+		engine = EasyOcrEngine(languages=["en"], gpu=False)
+	ctx = capture_and_ocr(engine)
+	
+	if not ctx.text.strip():
+		raise RuntimeError("OCR capture succeeded but produced no text")
+
+	session_module.append_screen_context(session, text=ctx.text, source=ctx.source)
+	session_module.save_session(session)
+	logger.info("Stored screen context for session %s", session.session_id)
+
 ## RUNNER FUNCTION
 
-def run_agent(*, new_session: bool, session_id: Optional[str], user_input: str) -> str:
-    try:
-        # 1) Load/create session
-        current_session = _fatal_step(
-            "Session init",
-            lambda: _get_session(new_session, session_id),
-            fallback_prefix="Session error",
-        )
+def run_agent(opts: RunOptions) -> str:
+	try:
+		# Load/create session
+		current_session = _fatal_step(
+			"Session init",
+			lambda: _get_session(opts.new_session, opts.session_id),
+			fallback_prefix="Session error",
+		)
+	
+		# Grab Screen Context
+		if opts.context:
+			_nonfatal_step(
+				"Screen context capture",
+				lambda: _capture_and_store_screen_context(current_session),
+			)
+	
+	
+		# Construct prompt
+		prompt = _fatal_step(
+			"Prompt construction",
+			lambda: _build_prompt(current_session, opts.user_input),
+			fallback_prefix="Prompt error",
+		)
 
-        # 2) Construct prompt
-        prompt = _fatal_step(
-            "Prompt construction",
-            lambda: _build_prompt(current_session, user_input),
-            fallback_prefix="Prompt error",
-        )
+		# Call LLM for response
+		output = _fatal_step(
+			"LLM response",
+			lambda: llm_router.generate_response(prompt),
+			fallback_prefix="LLM error",
+		)
 
-        # 3) Call LLM for response
-        output = _fatal_step(
-            "LLM response",
-            lambda: llm_router.generate_response(prompt),
-            fallback_prefix="LLM error",
-        )
+	except FatalStepError as exc:
+		# Single place where you decide what user sees
+		return fallback_response(exc.user_message)
 
-    except FatalStepError as exc:
-        # Single place where you decide what user sees
-        return fallback_response(exc.user_message)
+	# Non-fatal Save turn and reflection
+	_nonfatal_step("Save turn", lambda: _append_messages_and_save(current_session, opts.user_input, output))
+	_nonfatal_step("Reflection", lambda: _handle_reflection(current_session))
 
-    # 4) Non-fatal Save turn and reflection
-    _nonfatal_step("Save turn", lambda: _append_messages_and_save(current_session, user_input, output))
-    _nonfatal_step("Reflection", lambda: _handle_reflection(current_session))
-
-    return output
+	return output

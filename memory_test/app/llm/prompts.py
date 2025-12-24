@@ -62,28 +62,13 @@ def get_memory_block() -> str:
 	return "\n".join(lines) if len(lines) > 1 else "MEMORY: none."
 
 def get_reflection_memory_block() -> str:
-	items = memory_system.load_ltm()
+	items = memory_system.load_sanitized_ltm()
 	if not items:
 		return "MEMORY: none."
 
-	def sort_key(item: dict) -> tuple:
-		return (str(item.get("last_updated", "")), str(item.get("created_at", "")))
-
-	sorted_items = sorted(
-		[item for item in items if isinstance(item, dict)],
-		key=sort_key,
-		reverse=True,
-	)
-	
-    # Filter items by confidence threshold for now - in future add verbose instructions for fuzzy memories("MAYBE-")
-	filtered_items = [
-        item for item in sorted_items
-        if memory_system._safe_float(item.get("confidence", 0.0)) >= MIN_MEMORY_CONFIDENCE
-    ]
-
 	lines: list[str] = ["MEMORY:"]
 	
-	for item in filtered_items:
+	for item in items:
 		mem_id = str(item.get("id", "")).strip()
 		subject = str(item.get("subject", "")).strip() or "unknown"
 		mem_type = str(item.get("type", "")).strip() or "unknown"
@@ -95,6 +80,10 @@ def get_reflection_memory_block() -> str:
 			confidence = float(item.get("confidence", 0.0))
 		except (TypeError, ValueError):
 			confidence = 0.0
+
+		#TODO replace with fuzzy memories
+		if confidence < MIN_MEMORY_CONFIDENCE:
+			continue
 
 		id_part = f"[{mem_id}] " if mem_id else ""
 		lines.append(

@@ -120,6 +120,20 @@ def load_ltm(path: Optional[Path] = None) -> List[Dict[str, Any]]:
 		return []
 	return data if isinstance(data, list) else []
 
+def load_sanitized_ltm(path: Optional[Path] = None) -> List[Dict[str, Any]]:
+	items = load_ltm(path)
+	
+	def sort_key(item: dict) -> tuple:
+		return (str(item.get("last_updated", "")), str(item.get("created_at", "")))
+
+	sorted_items = sorted(
+		[item for item in items if isinstance(item, dict)],
+		key=sort_key,
+		reverse=True,
+	)
+	
+    ## TODO remove deactivated items here
+	return sorted_items
 
 def save_ltm(items: List[Dict[str, Any]], path: Optional[Path] = None) -> Path:
 	store_path = path or LTM_PATH
