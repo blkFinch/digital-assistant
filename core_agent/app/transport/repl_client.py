@@ -3,10 +3,9 @@ from __future__ import annotations
 import shlex
 from dataclasses import dataclass
 from typing import Optional
-
-from ..core.contracts import RunOptions
-from ..core.engine import AgentEngine
-from .cli_adapter import run_options_to_event
+import threading
+import time
+import sys
 
 
 HELP = """
@@ -31,7 +30,10 @@ class ReplState:
     debug: bool = False
 
 
-def _send(engine: AgentEngine, state: ReplState, text: str, *, new_session: bool = False) -> None:
+def _send(engine: "AgentEngine", state: ReplState, text: str, *, new_session: bool = False) -> None:
+    from ..core.contracts import RunOptions
+    from .cli_adapter import run_options_to_event
+    
     opts = RunOptions(
         new_session=new_session,
         session_id=state.session_id,
@@ -107,9 +109,32 @@ def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
     print(f"unknown command: {cmd}  (try /help)")
     return True
 
+def _boot_engine_with_spinner() -> AgentEngine:
+    stop = threading.Event()
+
+    def spin() -> None:
+        frames = ["|", "/", "-", "\\"]
+        i = 0
+        while not stop.is_set():
+            sys.stdout.write(f"\rLOADING AI Agent… {frames[i % len(frames)]}")
+            sys.stdout.flush()
+            i += 1
+            time.sleep(0.1)
+        sys.stdout.write("\rLOADING AI Agent… done.\n")
+        sys.stdout.flush()
+
+    t = threading.Thread(target=spin, daemon=True)
+    t.start()
+    try:
+        from ..core.engine import AgentEngine #deferred import
+        engine = AgentEngine()
+    finally:
+        stop.set()
+        t.join(timeout=1.0)
+    return engine
 
 def main() -> None:
-    engine = AgentEngine()
+    engine = _boot_engine_with_spinner()
     state = ReplState()
 
     print("AI Vtuber REPL. Type /help for commands.")
