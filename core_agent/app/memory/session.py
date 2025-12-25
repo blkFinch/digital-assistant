@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from ..core.contracts import SessionMessage
 
 from ..config import SESSIONS_DIR, MAX_SCREEN_CONTEXTS
 
@@ -17,7 +18,7 @@ class Session:
 	session_id: str
 	created_at: datetime
 	last_updated: datetime
-	messages: List[Dict[str, str]] = field(default_factory=list)
+	messages: List[Dict[str, Any]] = field(default_factory=list)
 	summary: str = ""
 	file_path: Optional[Path] = None
 	screen_contexts: List[Dict[str, Any]] = field(default_factory=list)
@@ -72,15 +73,13 @@ def create_new_session() -> Session:
 	)
 	return session
 
-
-def append_user_message(session: Session, text: str) -> None:
-	session.messages.append({"role": "user", "content": text})
-	session.last_updated = _now()
-	
-def append_assistant_message(session: Session, text: str) -> None:
-    session.messages.append({"role": "assistant", "content": text})
+def append_message(session: Session, msg: SessionMessage) -> None:
+    session.messages.append(msg.to_dict())
     session.last_updated = _now()
 
+
+def append_user_message(session: Session, text: str, *, meta: Optional[Dict[str, Any]] = None) -> None:
+    append_message(session, SessionMessage(role="user", content=text, meta=meta))
 
 def append_screen_context(
     session: Session,

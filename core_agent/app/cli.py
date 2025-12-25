@@ -2,8 +2,9 @@
 import argparse
 import sys
 
-from . import runner
-from .runner import RunOptions
+from .transport.cli_adapter import run_options_to_event
+from .core.engine import AgentEngine
+from .core.contracts import RunOptions
 from .utils.logger import configure_logging
 from .utils.prompt_dumper import configure_prompt_dumper
 
@@ -55,8 +56,10 @@ def main() -> None:
 		context=args.context,
 	)
 
-	response = runner.run_agent(opts)
-	print(response)
+	event = run_options_to_event(opts)
+	engine = AgentEngine()
+	response = engine.handle_event(event)
+	print(response.display_text)
 
 
 if __name__ == "__main__":

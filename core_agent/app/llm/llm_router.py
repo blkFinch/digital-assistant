@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from ..core.contracts import InitialResponseJson, PuppetDirective
 
 import requests
 
@@ -22,6 +23,45 @@ logger = get_logger(__name__)
 
 class OpenRouterError(RuntimeError):
 	"""Raised when an OpenRouter request or response fails."""
+
+def _parse_initial_response(text: str) -> InitialResponseJson:
+	try:
+		data = json.loads(text)
+	except json.JSONDecodeError as exc:
+		raise OpenRouterError("Initial response was not valid JSON") from exc
+
+	if not isinstance(data, dict):
+		raise OpenRouterError("Initial response JSON was not an object")
+
+	for key in ("display_text", "spoken_text", "puppet"):
+		if key not in data:
+			raise OpenRouterError(f"Initial response JSON missing key: {key}")
+
+	puppet = data.get("puppet")
+	if not isinstance(puppet, dict):
+		raise OpenRouterError('Initial response JSON field "puppet" must be an object')
+	
+	expression = str(puppet.get("expression", "idle"))
+	intensity_val = puppet.get("intensity", 0.5)
+	try:
+		intensity = float(intensity_val)
+	except (TypeError, ValueError):
+		intensity = 0.5
+	intensity = max(0.0, min(1.0, intensity))
+	
+	display_text = str(data.get("display_text", ""))
+	spoken_text = str(data.get("spoken_text", ""))
+	
+	puppet_dir = PuppetDirective(
+		expression=expression,
+		intensity=intensity,
+	)
+ 
+	return InitialResponseJson(
+		display_text=display_text,
+		spoken_text=spoken_text,
+		puppet=puppet_dir,
+	)
 
 
 def _require_api_key() -> str:
@@ -90,10 +130,13 @@ def _load_json_file(path: Path) -> Dict[str, Any]:
 		raise OpenRouterError(f"Invalid JSON in file: {path}") from exc
 
 
-def generate_response(messages: List[Dict[str, str]], *, model: Optional[str] = None) -> str:
+def generate_response(messages: List[Dict[str, str]], *, model: Optional[str] = None, path: Optional[Path] = None) -> InitialResponseJson:
 	"""Send the chat history to OpenRouter and return the assistant reply."""
-	payload = _build_payload(messages, model)
-	return _post_chat_completion(payload)
+	path = path or (DATA_DIR / "initial_response_format.json")
+	response_format = _load_json_file(path)
+	payload = _build_payload(messages, model, response_format=response_format)
+	raw_response = _post_chat_completion(payload)
+	return _parse_initial_response(raw_response)
 
 
 def generate_reflection_response(

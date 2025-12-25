@@ -1,0 +1,28 @@
+{
+    "type": "json_schema",
+    "json_schema": {
+        "name": "agent_response",
+        "strict": true,
+        "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["display_text", "spoken_text", "puppet"],
+            "properties": {
+                "display_text": {"type": "string"},
+                "spoken_text": {"type": "string"},
+                "puppet": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["expression", "intensity"],
+                    "properties": {
+                        "expression": {
+                            "type": "string",
+                            "enum": ["idle", "happy", "confused", "surprised", "annoyed", "thinking", "laugh"]
+                        },
+                        "intensity": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+                    }
+                }
+            }
+        }
+    }
+}

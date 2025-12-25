@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from dataclasses import dataclass
+from .core.contracts import RunOptions, InitialResponseJson
 from typing import Callable, Optional, TypeVar
 from .config import MIN_MEMORY_CONFIDENCE
 from .utils.logger import get_logger
@@ -15,14 +15,6 @@ logger = get_logger(__name__)
 dumper = get_prompt_dumper()
 
 T = TypeVar("T")
-
-@dataclass(frozen=True)
-class RunOptions:
-	new_session: bool = False
-	session_id: Optional[str] = None
-	user_input: str = ""
-	context: bool | None = None
-
 
 # ERROR HANDLING UTILITIES
 class FatalStepError(Exception):
@@ -56,9 +48,17 @@ def _nonfatal_step(label: str, fn: Callable[[], None]) -> None:
 	except Exception as exc:
 		logger.warning("%s failed: %s", label, exc)
 
-def fallback_response(reason: str) -> str:
-	logger.warning("Falling back to default response: %s", reason)
-	return datetime.now().strftime("Assistant response at %Y-%m-%d %H:%M:%S")
+def fallback_response(reason: str) -> tuple[InitialResponseJson, str]:
+	text = "Falling back to default response: %s", reason
+	logger.warning(text)
+
+	fallback = InitialResponseJson(
+		display_text=text,
+		spoken_text=text,
+		puppet={"expression": "confused", "intensity": 0.6},
+	)
+	return fallback, "unknown"
+
 
 # SESSION MANAGEMENT
 
@@ -86,12 +86,12 @@ def _get_session(new_session: bool, session_id: Optional[str]) -> session_module
 
 	return session
 
-def _append_messages_and_save(session: session_module.Session, user_input: str, output: str, context_added: bool = False) -> None:
+def _append_messages_and_save(session: session_module.Session, user_input: str, agent_output: InitialResponseJson, context_added: bool = False) -> None:
 	if context_added:
-		user_input += f"{user_input}\n[system note: fresh screen context was captured for this message]"
+		user_input += f"\n[system note: fresh screen context was captured for this message]"
   
 	session_module.append_user_message(session, user_input)
-	session_module.append_assistant_message(session, output)
+	session_module.append_message(session, agent_output.to_session_message())
 	session_module.save_session(session)
 	logger.info("Recorded turn for session %s", session.session_id)
 	
@@ -164,7 +164,7 @@ def _capture_and_store_screen_context(session: session_module.Session) -> None:
 
 ## RUNNER FUNCTION
 
-def run_agent(opts: RunOptions) -> str:
+def run_agent(opts: RunOptions) -> tuple[InitialResponseJson, str]:
 	try:
 		# Load/create session
 		current_session = _fatal_step(
@@ -203,4 +203,4 @@ def run_agent(opts: RunOptions) -> str:
 	_nonfatal_step("Save turn", lambda: _append_messages_and_save(current_session, opts.user_input, output))
 	_nonfatal_step("Reflection", lambda: _handle_reflection(current_session))
 
-	return output
+	return output, current_session.session_id

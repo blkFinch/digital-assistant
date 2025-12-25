@@ -93,10 +93,30 @@ def get_reflection_memory_block() -> str:
 
 	return "\n".join(lines) if len(lines) > 1 else "MEMORY: none."
 
-def construct_system_message_content() -> str:
+def _construct_system_message_content() -> str:
 	personality = get_personality()
 	memory_block = get_memory_block()
 	return personality + "\n\n" + memory_block
+
+def _construct_response_format_system_message() -> dict[str, str]:
+	return {
+		"role": "system",
+		"content": (
+			"Return JSON ONLY with this schema:\n"
+			"{\n"
+			'  "display_text": "string",\n'
+			'  "spoken_text": "string",\n'
+			'  "puppet": {\n'
+			'    "expression": "idle|happy|confused|surprised|annoyed|thinking|laugh",\n'
+			'    "intensity": 0.0\n'
+			"  }\n"
+			"}\n\n"
+			"Rules:\n"
+			"- display_text may include emojis.\n"
+			"- spoken_text must NOT include emojis or markdown.\n"
+			"- intensity must be between 0.0 and 1.0.\n"
+		),
+	}
 
 
 def _construct_screen_context_system_message(session) -> Optional[dict[str, str]]:
@@ -121,16 +141,25 @@ def _construct_screen_context_system_message(session) -> Optional[dict[str, str]
 		"content": f"SCREEN CONTEXT (OCR){meta}:\n\n{ctx_text}",
 	}
 
+def _strip_message_for_llm(msg: dict) -> dict[str, str]:
+	"""Return only the fields the LLM should see."""
+	role = str(msg.get("role", "")).strip() or "user"
+	content = str(msg.get("content", "")).strip()
+	return {"role": role, "content": content}
+
 
 def construct_prompt(session, user_input: str) -> list:
 	"""Build the main chat prompt for the assistant."""
-	system_message = {"role": "system", "content": construct_system_message_content()}
+	system_message = {"role": "system", "content": _construct_system_message_content()}
 	screen_context_message = _construct_screen_context_system_message(session)
 	limit = max(PROMPT_MESSAGE_LIMIT, 0)
-	recent_messages = session.messages[-limit:] if limit > 0 else []
+	recent_messages_raw = session.messages[-limit:] if limit > 0 else []
+	recent_messages = [_strip_message_for_llm(msg) for msg in recent_messages_raw]
 	base = [system_message]
 	if screen_context_message:
 		base.append(screen_context_message)
+	
+	base.append(_construct_response_format_system_message())
 	return base + recent_messages + [{"role": "user", "content": user_input}]
 
 
