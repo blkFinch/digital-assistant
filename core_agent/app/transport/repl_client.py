@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import shlex
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import threading
 import time
 import sys
+if TYPE_CHECKING:
+    from ..core.engine import AgentEngine
 
 
 HELP = """
@@ -30,7 +32,7 @@ class ReplState:
     debug: bool = False
 
 
-def _send(engine: "AgentEngine", state: ReplState, text: str, *, new_session: bool = False) -> None:
+def _send(engine: AgentEngine, state: ReplState, text: str, *, new_session: bool = False) -> None:
     from ..core.contracts import RunOptions
     from .cli_adapter import run_options_to_event
     
@@ -40,18 +42,9 @@ def _send(engine: "AgentEngine", state: ReplState, text: str, *, new_session: bo
         user_input=text,
         context=state.context_default,
     )
+
     event = run_options_to_event(opts)
-    out = engine.handle_event(event)
-
-    # update session_id if engine created/selected one (recommended behavior)
-    if out.session_id and out.session_id != "unknown":
-        state.session_id = out.session_id
-
-    print(f"assistant: {out.display_text}")
-
-    if state.debug:
-        print(f"[debug] session_id={out.session_id} puppet={getattr(out, 'puppet', None)}")
-
+    engine.handle_event(event)
 
 def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
     parts = shlex.split(line)
@@ -133,9 +126,24 @@ def _boot_engine_with_spinner() -> AgentEngine:
         t.join(timeout=1.0)
     return engine
 
+# TODO enhance this with colors and styling and perhaps a little animation when awaiting a response
 def main() -> None:
     engine = _boot_engine_with_spinner()
     state = ReplState()
+    
+    ##OUTPUT BUS LISTENER
+    def on_output(out) ->None:
+        #update session tracking from emitted outputs
+        if out.session_id and out.session_id != "unknown":
+            state.session_id = out.session_id
+        
+        # print assistant text (bus-driven)
+        print(f"\nassistant: {out.display_text}")
+
+        if state.debug:
+            print(f"[debug] session_id={out.session_id} puppet={getattr(out, 'puppet', None)}")
+
+    engine.output_bus.subscribe(on_output)
 
     print("AI Vtuber REPL. Type /help for commands.")
     while True:
