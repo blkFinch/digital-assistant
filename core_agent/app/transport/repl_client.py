@@ -127,8 +127,10 @@ def _boot_engine_with_spinner() -> AgentEngine:
     return engine
 
 # TODO enhance this with colors and styling and perhaps a little animation when awaiting a response
-def main() -> None:
-    engine = _boot_engine_with_spinner()
+def main(engine: AgentEngine | None = None) -> None:
+    if engine is None:
+        engine = _boot_engine_with_spinner()
+    
     state = ReplState()
     
     ##OUTPUT BUS LISTENER

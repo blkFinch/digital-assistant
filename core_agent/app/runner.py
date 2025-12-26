@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 from .core.contracts import RunOptions, InitialResponseJson
 from typing import Callable, Optional, TypeVar
 from .config import MIN_MEMORY_CONFIDENCE
@@ -15,7 +14,7 @@ logger = get_logger(__name__)
 dumper = get_prompt_dumper()
 
 T = TypeVar("T")
-
+# TODO find a place for Runner to live - is it in core?
 # ERROR HANDLING UTILITIES
 class FatalStepError(Exception):
     def __init__(self, user_message: str):

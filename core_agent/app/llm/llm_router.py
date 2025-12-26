@@ -8,7 +8,8 @@ from ..core.contracts import InitialResponseJson, PuppetDirective
 import requests
 
 from ..config import (
-	DATA_DIR,
+	RESOURCES_DIR
+ ,
 	OPENROUTER_API_KEY,
 	OPENROUTER_APP_NAME,
 	OPENROUTER_BASE_URL,
@@ -132,7 +133,7 @@ def _load_json_file(path: Path) -> Dict[str, Any]:
 
 def generate_response(messages: List[Dict[str, str]], *, model: Optional[str] = None, path: Optional[Path] = None) -> InitialResponseJson:
 	"""Send the chat history to OpenRouter and return the assistant reply."""
-	path = path or (DATA_DIR / "initial_response_format.json")
+	path = path or (RESOURCES_DIR / "initial_response_format.json")
 	response_format = _load_json_file(path)
 	payload = _build_payload(messages, model, response_format=response_format)
 	raw_response = _post_chat_completion(payload)
@@ -150,7 +151,7 @@ def generate_reflection_response(
 	This is intended for the "2nd reflection" call where we want to enforce
 	structured JSON output via the `response_format` request parameter.
 	"""
-	path = response_format_path or (DATA_DIR / "reflection_response_format.json")
+	path = response_format_path or (RESOURCES_DIR / "reflection_response_format.json")
 	response_format = _load_json_file(path)
 	payload = _build_payload(messages, model, response_format=response_format)
 	return _post_chat_completion(payload)

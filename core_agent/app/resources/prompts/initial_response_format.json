@@ -17,7 +17,7 @@
                     "properties": {
                         "expression": {
                             "type": "string",
-                            "enum": ["idle", "happy", "confused", "surprised", "annoyed", "thinking", "laugh"]
+                            "enum": ["idle", "happy", "angry", "confused", "surprised", "annoyed", "thinking", "laugh", "sad", "smug"]
                         },
                         "intensity": {"type": "number", "minimum": 0.0, "maximum": 1.0}
                     }
@@ -25,4 +25,4 @@
             }
         }
     }
-}
+} //TODO move these to resources folder
