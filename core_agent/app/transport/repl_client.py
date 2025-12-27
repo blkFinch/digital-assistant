@@ -7,9 +7,31 @@ import threading
 import time
 import sys
 from ..tts.factory import make_tts_subscriber
+
+try:
+    from colorama import Fore, Style, init as colorama_init
+    colorama_init()
+    HAS_COLORAMA = True
+except ImportError:
+    HAS_COLORAMA = False
+    class Fore:
+        CYAN = ""
+        GREEN = ""
+        YELLOW = ""
+        RED = ""
+        MAGENTA = ""
+    class Style:
+        RESET_ALL = ""
+
 if TYPE_CHECKING:
     from ..core.engine import AgentEngine
 
+
+def colorize(text: str, color: str = "") -> str:
+    """Wrap text with colorama color code and reset. Gracefully handles missing colorama."""
+    if not color:
+        return text
+    return f"{color}{text}{Style.RESET_ALL}"
 
 
 HELP = """
@@ -69,7 +91,7 @@ def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
         return False
 
     if cmd == "/status":
-        print(f"session: {state.session_id or '(latest)'} | context_default: {state.context_default} | debug: {state.debug}")
+        print(f"{colorize('session', Fore.CYAN)}: {state.session_id or '(latest)'} | {colorize('context_default', Fore.CYAN)}: {state.context_default} | {colorize('debug', Fore.CYAN)}: {state.debug}")
         return True
 
     if cmd == "/new":
@@ -82,26 +104,26 @@ def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
 
     if cmd == "/session":
         if not args:
-            print("usage: /session <session_id>")
+            print(colorize("usage: /session <session_id>", Fore.RED))
             return True
         state.session_id = args[0]
-        print(f"switched to session: {state.session_id}")
+        print(colorize(f"switched to session: {state.session_id}", Fore.GREEN))
         return True
 
     if cmd == "/context":
         if not args or args[0].lower() not in ("on", "off"):
-            print("usage: /context on|off")
+            print(colorize("usage: /context on|off", Fore.RED))
             return True
         state.context_default = args[0].lower() == "on"
-        print(f"context_default = {state.context_default}")
+        print(colorize(f"context_default = {state.context_default}", Fore.YELLOW))
         return True
 
     if cmd == "/verbose":
         if not args or args[0].lower() not in ("on", "off"):
-            print("usage: /debug on|off")
+            print(colorize("usage: /debug on|off", Fore.RED))
             return True
         state.debug = args[0].lower() == "on"
-        print(f"repl debug = {state.debug}")
+        print(colorize(f"repl debug = {state.debug}", Fore.YELLOW))
         
         # Sync the global prompt dumper with the REPL's debug state
         from ..utils.prompt_dumper import configure_prompt_dumper
@@ -111,18 +133,18 @@ def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
 
     if cmd == "/say":
         if not args:
-            print("usage: /say <text>")
+            print(colorize("usage: /say <text>", Fore.RED))
             return True
         _send(engine, state, " ".join(args))
         return True
     
     if cmd == "/tts":
         if not args or args[0].lower() not in ("on", "off", "flush"):
-            print("usage: /tts on|off|toggle|flush")
+            print(colorize("usage: /tts on|off|toggle|flush", Fore.RED))
             return True
 
         if state.tts_sub is None:
-            print("tts not configured")
+            print(colorize("tts not configured", Fore.RED))
             return True
 
         action = args[0].lower()
@@ -130,18 +152,18 @@ def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
         if action == "flush":
             if hasattr(state.tts_sub, "flush"):
                 state.tts_sub.flush()
-            print("tts flushed")
+            print(colorize("tts flushed", Fore.GREEN))
             return True
 
         state.tts_enabled = (action == "on")
         if hasattr(state.tts_sub, "set_enabled"):
             state.tts_sub.set_enabled(state.tts_enabled)
-        print(f"tts = {state.tts_enabled}")
+        print(colorize(f"tts = {state.tts_enabled}", Fore.YELLOW))
         return True
 
         #toggle tts
 
-    print(f"unknown command: {cmd}  (try /help)")
+    print(colorize(f"unknown command: {cmd}  (try /help)", Fore.RED))
     return True
 
 def _boot_engine_with_spinner() -> AgentEngine:
@@ -151,11 +173,11 @@ def _boot_engine_with_spinner() -> AgentEngine:
         frames = ["|", "/", "-", "\\"]
         i = 0
         while not stop.is_set():
-            sys.stdout.write(f"\rLOADING AI Agent… {frames[i % len(frames)]}")
+            sys.stdout.write(f"\r{colorize(f'LOADING AI Agent… {frames[i % len(frames)]}', Fore.MAGENTA)}")
             sys.stdout.flush()
             i += 1
             time.sleep(0.1)
-        sys.stdout.write("\rLOADING AI Agent… done.\n")
+        sys.stdout.write(f"\r{colorize('LOADING AI Agent… done.', Fore.GREEN)}\n")
         sys.stdout.flush()
 
     t = threading.Thread(target=spin, daemon=True)
@@ -185,10 +207,10 @@ def main(engine: AgentEngine | None = None, *, subscribe_to_output: bool = True,
             if out.session_id and out.session_id != "unknown":
                 state.session_id = out.session_id
 
-            print(f"\nassistant: {out.display_text}")
+            print(f"\n{colorize('assistant', Fore.GREEN)}: {out.display_text}")
 
             if state.debug:
-                print(f"[debug] session_id={out.session_id} puppet={getattr(out, 'puppet', None)}")
+                print(f"{colorize('[debug]', Fore.YELLOW)} session_id={out.session_id} puppet={getattr(out, 'puppet', None)}")
 
         unsubscribe = engine.output_bus.subscribe(on_output)
 
@@ -197,9 +219,9 @@ def main(engine: AgentEngine | None = None, *, subscribe_to_output: bool = True,
         while True:
             try:
                 prompt = state.session_id or "latest"
-                line = input(f"[{prompt}] > ").strip()
+                line = input(f"{colorize(f'[{prompt}]', Fore.CYAN)} > ").strip()
             except (EOFError, KeyboardInterrupt):
-                print("\nbye")
+                print(f"\n{colorize('bye', Fore.YELLOW)}")
                 if on_quit:
                     on_quit()
                 return

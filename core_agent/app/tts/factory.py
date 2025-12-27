@@ -19,8 +19,8 @@ def make_tts_subscriber(init: Optional[TTSInit] = None) -> TTSSubscriber:
     player = AudioPlayer()           # picks a backend internally
 
     return TTSSubscriber(
-        synthesizer=synth,
-        player=player,
+        tts_client=synth,
+        audio_player=player,
         config=TTSConfig(
             enabled=init.enabled,
             interrupt=init.interrupt,
