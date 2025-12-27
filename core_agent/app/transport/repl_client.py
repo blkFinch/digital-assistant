@@ -35,6 +35,11 @@ class ReplState:
 def _send(engine: AgentEngine, state: ReplState, text: str, *, new_session: bool = False) -> None:
     from ..core.contracts import RunOptions
     from .cli_adapter import run_options_to_event
+
+    # Default behavior: if the REPL hasn't selected a session yet, start a fresh
+    # one on the first user message instead of attaching to the latest session.
+    if state.session_id is None and not new_session:
+        new_session = True
     
     opts = RunOptions(
         new_session=new_session,
@@ -63,6 +68,8 @@ def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
         return True
 
     if cmd == "/new":
+        # Force a brand-new session regardless of any previously selected session.
+        state.session_id = None
         # We still need a user_input to kick the pipeline; send a lightweight system-ish hello.
         # Alternative: implement a NEW_SESSION event type later.
         _send(engine, state, "start new session", new_session=True)
@@ -90,6 +97,11 @@ def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
             return True
         state.debug = args[0].lower() == "on"
         print(f"repl debug = {state.debug}")
+        
+        # Sync the global prompt dumper with the REPL's debug state
+        from ..utils.prompt_dumper import configure_prompt_dumper
+        configure_prompt_dumper(debug=state.debug)
+        
         return True
 
     if cmd == "/say":
