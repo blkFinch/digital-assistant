@@ -11,8 +11,8 @@ DATA_DIR = ROOT_DIR / "data"
 RESOURCES_DIR = ROOT_DIR / "app" / "resources"
 SESSIONS_DIR = DATA_DIR / "sessions"
 LOGS_DIR = ROOT_DIR / "logs"
-PERSONALITY_PATH = RESOURCES_DIR / "personality.md"
-REFLECTION_PROMPT_PATH = RESOURCES_DIR / "reflection_prompt.txt"
+PERSONALITY_PATH = RESOURCES_DIR / "prompts" /"personality.md"
+REFLECTION_PROMPT_PATH = RESOURCES_DIR / "prompts" / "reflection_prompt.txt"
 PROMPT_MESSAGE_LIMIT = int(os.getenv("PROMPT_MESSAGE_LIMIT", "15"))
 REFLECTION_MESSAGE_LIMIT = int(os.getenv("REFLECTION_MESSAGE_LIMIT", "10"))
 

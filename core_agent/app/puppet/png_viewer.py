@@ -29,8 +29,11 @@ class PuppetPaths:
         return self.base_dir / f"{self.default_emotion}.png"
 
 
-def default_chibi_dir() -> Path:
-    # core_agent/app/viewer/png_viewer.py -> core_agent/app -> core_agent/app/resources/puppets/chibi
+def default_puppet_dir(puppet_name: str = "chibi") -> Path:
+    # core_agent/app/viewer/png_viewer.py -> core_agent/app -> core_agent/app/resources/puppets/{puppet_name}
+    puppet_dir = RESOURCES_DIR / "puppets" / puppet_name
+    if puppet_dir.exists():
+        return puppet_dir
     return RESOURCES_DIR / "puppets" / "chibi"
 
 
@@ -82,7 +85,7 @@ class PngViewer:
 
 def main() -> None:
     # Minimal manual test: opens the viewer and cycles emotions every 1s.
-    puppets_dir = default_chibi_dir()
+    puppets_dir = default_puppet_dir()
     puppets = PuppetPaths(base_dir=puppets_dir, default_emotion="idle")
 
     root = tk.Tk()

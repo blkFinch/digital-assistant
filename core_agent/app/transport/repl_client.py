@@ -127,44 +127,52 @@ def _boot_engine_with_spinner() -> AgentEngine:
     return engine
 
 # TODO enhance this with colors and styling and perhaps a little animation when awaiting a response
-def main(engine: AgentEngine | None = None) -> None:
+def main(engine: AgentEngine | None = None, *, subscribe_to_output: bool = True, on_quit: callable | None = None) -> None:
     if engine is None:
         engine = _boot_engine_with_spinner()
-    
+
     state = ReplState()
-    
-    ##OUTPUT BUS LISTENER
-    def on_output(out) ->None:
-        #update session tracking from emitted outputs
-        if out.session_id and out.session_id != "unknown":
-            state.session_id = out.session_id
-        
-        # print assistant text (bus-driven)
-        print(f"\nassistant: {out.display_text}")
 
-        if state.debug:
-            print(f"[debug] session_id={out.session_id} puppet={getattr(out, 'puppet', None)}")
+    unsubscribe = None
+    if subscribe_to_output:
+        def on_output(out) -> None:
+            if out.session_id and out.session_id != "unknown":
+                state.session_id = out.session_id
 
-    engine.output_bus.subscribe(on_output)
+            print(f"\nassistant: {out.display_text}")
 
-    print("AI Vtuber REPL. Type /help for commands.")
-    while True:
-        try:
-            prompt = state.session_id or "latest"
-            line = input(f"[{prompt}] > ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nbye")
-            return
+            if state.debug:
+                print(f"[debug] session_id={out.session_id} puppet={getattr(out, 'puppet', None)}")
 
-        if not line:
-            continue
+        unsubscribe = engine.output_bus.subscribe(on_output)
 
-        if line.startswith("/"):
-            if not _handle_command(engine, state, line):
+    try:
+        print("AI Vtuber REPL. Type /help for commands.")
+        while True:
+            try:
+                prompt = state.session_id or "latest"
+                line = input(f"[{prompt}] > ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nbye")
+                if on_quit:
+                    on_quit()
                 return
-            continue
 
-        _send(engine, state, line)
+            if not line:
+                continue
+
+            if line.startswith("/"):
+                if not _handle_command(engine, state, line):
+                    if on_quit:
+                        on_quit()
+                    return
+                continue
+
+            _send(engine, state, line)
+
+    finally:
+        if unsubscribe:
+            unsubscribe()
 
 
 if __name__ == "__main__":
