@@ -6,8 +6,10 @@ from typing import Optional, TYPE_CHECKING
 import threading
 import time
 import sys
+from ..tts.factory import make_tts_subscriber
 if TYPE_CHECKING:
     from ..core.engine import AgentEngine
+
 
 
 HELP = """
@@ -18,8 +20,9 @@ Commands:
   /session <id>         switch to an existing session id
   /status               show current session + toggles
   /context on|off       toggle OCR capture for each message
-  /verbose on|off         toggle debug printing in the REPL (not logger config)
+  /verbose on|off       toggle debug printing in the REPL (not logger config)
   /say <text>           send one message (same as typing normally)
+  /tts on|off|flush     toggles tts
 
 Anything not starting with / is sent as a user message.
 """.strip()
@@ -30,6 +33,8 @@ class ReplState:
     session_id: Optional[str] = None
     context_default: bool = False
     debug: bool = False
+    tts_enabled: bool = False
+    tts_sub: object | None = None
 
 
 def _send(engine: AgentEngine, state: ReplState, text: str, *, new_session: bool = False) -> None:
@@ -110,6 +115,31 @@ def _handle_command(engine: AgentEngine, state: ReplState, line: str) -> bool:
             return True
         _send(engine, state, " ".join(args))
         return True
+    
+    if cmd == "/tts":
+        if not args or args[0].lower() not in ("on", "off", "flush"):
+            print("usage: /tts on|off|toggle|flush")
+            return True
+
+        if state.tts_sub is None:
+            print("tts not configured")
+            return True
+
+        action = args[0].lower()
+
+        if action == "flush":
+            if hasattr(state.tts_sub, "flush"):
+                state.tts_sub.flush()
+            print("tts flushed")
+            return True
+
+        state.tts_enabled = (action == "on")
+        if hasattr(state.tts_sub, "set_enabled"):
+            state.tts_sub.set_enabled(state.tts_enabled)
+        print(f"tts = {state.tts_enabled}")
+        return True
+
+        #toggle tts
 
     print(f"unknown command: {cmd}  (try /help)")
     return True
@@ -144,6 +174,10 @@ def main(engine: AgentEngine | None = None, *, subscribe_to_output: bool = True,
         engine = _boot_engine_with_spinner()
 
     state = ReplState()
+    
+    tts_sub = make_tts_subscriber()
+    unsub_tts = engine.output_bus.subscribe(tts_sub)
+    state.tts_sub = tts_sub
 
     unsubscribe = None
     if subscribe_to_output:
@@ -185,6 +219,8 @@ def main(engine: AgentEngine | None = None, *, subscribe_to_output: bool = True,
     finally:
         if unsubscribe:
             unsubscribe()
+        if subscribe_to_output and 'unsub_tts' in locals():
+            unsub_tts()
 
 
 if __name__ == "__main__":

@@ -34,3 +34,12 @@ OPENROUTER_DEFAULT_MODEL = os.getenv("OPENROUTER_DEFAULT_MODEL", "openrouter/aut
 OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "memory-test")
 OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "")
 OPENROUTER_REQUEST_TIMEOUT = float(os.getenv("OPENROUTER_REQUEST_TIMEOUT", "30"))
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+# TTS configuration
+TTS_PROVIDER = os.getenv("TTS_PROVIDER", "openai")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini-tts")
+TTS_VOICE = os.getenv("TTS_VOICE", "alloy")
+TTS_FORMAT = os.getenv("TTS_FORMAT", "wav")
+TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", "24000"))
