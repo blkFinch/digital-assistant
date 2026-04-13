@@ -40,6 +40,18 @@ The dev cockpit is an interactive REPL for testing the AI agent.
 - **Prompt Dumps**: When debug is enabled, prompts sent to the LLM are saved to `core_agent/logs/latest_prompt.txt` and `latest_reflection_prompt.txt`. This helps inspect what the AI is seeing and processing.
 - Session data is stored in `core_agent/data/sessions/` as JSON files.
 
+### Personality Selection (swappable personas)
+The assistant’s personality is loaded from a prompt file. You can switch it without code changes via env vars (the app loads `.env` via `python-dotenv`).
+
+- `PERSONALITY_NAME` — resolves to `core_agent/app/resources/prompts/personalities/<PERSONALITY_NAME>.md`
+  - Nested names are allowed (e.g. `anime/yuki`)
+
+Examples:
+- `PERSONALITY_NAME=yuki`
+- `PERSONALITY_NAME=anime/yuki`
+
+Default (when unset): `core_agent/app/resources/prompts/personality.md`
+
 ## Notes on EasyOCR
 - make sure to install the correct torchvision if you have a nvidia gpu to utilize cuda
 
