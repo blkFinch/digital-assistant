@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "memory-mcp"
+version = "0.1.0"
+description = "MCP server for persistent memory and personality management"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.28.0",
+]
+
+[project.scripts]
+memory-mcp = "memory_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/memory_mcp"]

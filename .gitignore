@@ -4,5 +4,6 @@ __pycache__/
 *.pyc
 core_agent/app/__pycache__/cli.cpython-310.pyc
 core_agent/data/sessions/
+core_agent/data/ltm/
 /logs/*
 core_agent/logs/*
