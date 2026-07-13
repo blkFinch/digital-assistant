@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from ..core.contracts import SessionMessage
 
-from ..config import SESSIONS_DIR, MAX_SCREEN_CONTEXTS
+from .. import config
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -20,6 +20,7 @@ class Session:
 	last_updated: datetime
 	messages: List[Dict[str, Any]] = field(default_factory=list)
 	summary: str = ""
+	ltm_name: str = ""
 	file_path: Optional[Path] = None
 	screen_contexts: List[Dict[str, Any]] = field(default_factory=list)
 	active_screen_context_id: Optional[str] = None
@@ -31,6 +32,7 @@ class Session:
 			"last_updated": timestamp_to_iso(self.last_updated),
 			"messages": self.messages,
 			"summary": self.summary,
+			"ltm_name": self.ltm_name,
 			"screen_contexts": self.screen_contexts,
 			"active_screen_context_id": self.active_screen_context_id,
 		}
@@ -45,12 +47,12 @@ def iso_to_datetime(value: str) -> datetime:
 
 
 def _ensure_sessions_dir() -> None:
-	SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+	config.SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _session_path(session_id: str) -> Path:
 	_ensure_sessions_dir()
-	return SESSIONS_DIR / f"{session_id}.json"
+	return config.SESSIONS_DIR / f"{session_id}.json"
 
 
 def _now() -> datetime:
@@ -67,6 +69,7 @@ def create_new_session() -> Session:
 		last_updated=now,
 		messages=messages,
 		summary="",
+		ltm_name=config.LTM_NAME,
 		screen_contexts=[],
 		active_screen_context_id=None,
 		file_path=_session_path(session_id),
@@ -157,12 +160,22 @@ def save_session(session: Session) -> Path:
 
 def load_session(path: Path) -> Session:
 	raw = json.loads(path.read_text())
+	saved_ltm_name = raw.get("ltm_name", "")
+	current_ltm_name = config.LTM_NAME
+	if saved_ltm_name != current_ltm_name:
+		raise RuntimeError(
+			"Session was created with a different LTM_NAME. "
+			f"Session ltm_name='{saved_ltm_name}', current LTM_NAME='{current_ltm_name}'. "
+			"Start a new session (e.g. --new-session) or switch LTM_NAME back."
+		)
+
 	session = Session(
 		session_id=raw["session_id"],
 		created_at=iso_to_datetime(raw["created_at"]),
 		last_updated=iso_to_datetime(raw["last_updated"]),
 		messages=raw.get("messages", []),
 		summary=raw.get("summary", ""),
+		ltm_name=saved_ltm_name,
 		screen_contexts=raw.get("screen_contexts", []),
 		active_screen_context_id=raw.get("active_screen_context_id"),
 		file_path=path,
@@ -170,17 +183,17 @@ def load_session(path: Path) -> Session:
 	return session
 
 def _cap_screen_contexts(contexts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Keep only the most recent MAX_SCREEN_CONTEXTS.
-    If active id was pointing to a removed context, caller should handle.
-    """
-    if len(contexts) <= MAX_SCREEN_CONTEXTS:
-        return contexts
-    return contexts[-MAX_SCREEN_CONTEXTS:]
+	"""Keep only the most recent MAX_SCREEN_CONTEXTS.
+
+	If active id was pointing to a removed context, caller should handle.
+	"""
+	if len(contexts) <= config.MAX_SCREEN_CONTEXTS:
+		return contexts
+	return contexts[-config.MAX_SCREEN_CONTEXTS:]
 
 def _session_files() -> List[Path]:
 	_ensure_sessions_dir()
-	return sorted(SESSIONS_DIR.glob("session_*.json"), key=lambda p: p.stat().st_mtime)
+	return sorted(config.SESSIONS_DIR.glob("session_*.json"), key=lambda p: p.stat().st_mtime)
 
 
 def load_latest_session() -> Optional[Session]:

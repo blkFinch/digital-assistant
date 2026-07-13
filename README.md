@@ -52,6 +52,20 @@ Examples:
 
 Default (when unset): `core_agent/app/resources/prompts/personality.md`
 
+### Long-Term Memory Selection (swappable LTM)
+You can isolate long-term memory per profile without changing code.
+
+- `LTM_NAME` — routes LTM + revision log to:
+  - `core_agent/data/ltm/<LTM_NAME>/ltm.json`
+  - `core_agent/data/ltm/<LTM_NAME>/revision_log.jsonl`
+- Default (when unset):
+  - `core_agent/data/sessions/ltm.json`
+  - `core_agent/data/sessions/revision_log.jsonl`
+
+Notes:
+- Session files are stamped with `ltm_name`; resuming a session under a different `LTM_NAME` will fail fast.
+- `core_agent/data/ltm/` is gitignored by default.
+
 ## Notes on EasyOCR
 - make sure to install the correct torchvision if you have a nvidia gpu to utilize cuda
 

@@ -6,10 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..config import REVISION_LOG_PATH, SESSIONS_DIR
-
-
-LTM_PATH = SESSIONS_DIR / "ltm.json"
+from .. import config
 
 @dataclass
 class MemoryItem:
@@ -95,8 +92,8 @@ def _new_event_id() -> str:
 
 
 def _append_revision_log(entry: Dict[str, Any]) -> None:
-	REVISION_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-	with REVISION_LOG_PATH.open("a", encoding="utf-8", newline="\n") as f:
+	config.REVISION_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+	with config.REVISION_LOG_PATH.open("a", encoding="utf-8", newline="\n") as f:
 		f.write(json.dumps(entry, ensure_ascii=False))
 		f.write("\n")
 
@@ -109,7 +106,7 @@ def load_ltm(path: Optional[Path] = None) -> List[Dict[str, Any]]:
 
 	The file contains a JSON array of memory objects.
 	"""
-	store_path = path or LTM_PATH
+	store_path = path or config.LTM_PATH
 	store_path.parent.mkdir(parents=True, exist_ok=True)
 	if not store_path.exists() or store_path.stat().st_size == 0:
 		return []
@@ -136,7 +133,7 @@ def load_sanitized_ltm(path: Optional[Path] = None) -> List[Dict[str, Any]]:
 	return sorted_items
 
 def save_ltm(items: List[Dict[str, Any]], path: Optional[Path] = None) -> Path:
-	store_path = path or LTM_PATH
+	store_path = path or config.LTM_PATH
 	store_path.parent.mkdir(parents=True, exist_ok=True)
 	store_path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
 	return store_path

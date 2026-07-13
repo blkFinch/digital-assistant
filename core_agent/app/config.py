@@ -12,6 +12,14 @@ RESOURCES_DIR = ROOT_DIR / "app" / "resources"
 SESSIONS_DIR = DATA_DIR / "sessions"
 LOGS_DIR = ROOT_DIR / "logs"
 
+# Long-term memory (LTM)
+#
+# Default (backwards compatible): keep LTM under data/sessions/
+# If LTM_NAME is set: route LTM + revision log under data/ltm/<LTM_NAME>/
+LTM_ROOT_DIR = DATA_DIR / "ltm"
+DEFAULT_LTM_PATH = SESSIONS_DIR / "ltm.json"
+DEFAULT_REVISION_LOG_PATH = SESSIONS_DIR / "revision_log.jsonl"
+
 DEFAULT_PERSONALITY_PATH = RESOURCES_DIR / "prompts" / "personality.md"
 PERSONALITIES_DIR = RESOURCES_DIR / "prompts" / "personalities"
 
@@ -62,8 +70,41 @@ REFLECTION_MESSAGE_LIMIT = int(os.getenv("REFLECTION_MESSAGE_LIMIT", "10"))
 
 MAX_SCREEN_CONTEXTS = int(os.getenv("MAX_SCREEN_CONTEXTS", "5"))
 
-# Debugging / audit
-REVISION_LOG_PATH = SESSIONS_DIR / "revision_log.jsonl"
+def resolve_ltm_paths():
+	"""Resolve which LTM store + revision log to use based on LTM_NAME.
+
+	- If LTM_NAME is unset/blank: use DEFAULT_* paths under data/sessions/.
+	- If set: use data/ltm/<LTM_NAME>/ltm.json and revision_log.jsonl
+
+	This validates that LTM_NAME is a *relative* path and that resolution stays
+	within LTM_ROOT_DIR to prevent directory traversal.
+	"""
+	name = (os.getenv("LTM_NAME") or "").strip()
+	if not name:
+		return "", DEFAULT_LTM_PATH, DEFAULT_REVISION_LOG_PATH
+
+	name_path = Path(name)
+	if name_path.is_absolute():
+		raise RuntimeError(
+			"Invalid LTM_NAME: must be a relative name like 'yuki_ltm' or 'stream/yuki' "
+			"(no absolute paths)."
+		)
+
+	candidate_dir = (LTM_ROOT_DIR / name_path)
+	ltm_root = LTM_ROOT_DIR.resolve()
+	resolved_dir = candidate_dir.resolve()
+	try:
+		resolved_dir.relative_to(ltm_root)
+	except ValueError as e:
+		raise RuntimeError(
+			f"Invalid LTM_NAME '{name}': resolved path must be inside {ltm_root}"
+		) from e
+
+	return name, (resolved_dir / "ltm.json"), (resolved_dir / "revision_log.jsonl")
+
+
+# Debugging / audit + memory store routing
+LTM_NAME, LTM_PATH, REVISION_LOG_PATH = resolve_ltm_paths()
 
 # Memory gating
 MIN_MEMORY_CONFIDENCE = float(os.getenv("MIN_MEMORY_CONFIDENCE", "0.4"))
