@@ -7,6 +7,7 @@ from memory_mcp.personality import (
     set_active_personality,
     load_personality,
     list_personalities,
+    save_personality,
 )
 
 
@@ -109,3 +110,65 @@ def test_path_traversal_blocked(data_dir):
 def test_absolute_path_blocked(data_dir):
     with pytest.raises(FileNotFoundError):
         load_personality(data_dir, "/etc/passwd")
+
+
+# --- Save personality ---
+
+def test_save_default_personality(data_dir):
+    result = save_personality(data_dir, "# New Default\nYou are new.")
+    assert result["name"] == "(default)"
+    content = (data_dir / "personality.md").read_text(encoding="utf-8")
+    assert "New Default" in content
+
+
+def test_save_named_personality(data_dir):
+    result = save_personality(data_dir, "# Cowboy\nHowdy partner.", name="cowboy")
+    assert result["name"] == "cowboy"
+    names = [p["name"] for p in list_personalities(data_dir)]
+    assert "cowboy" in names
+
+
+def test_save_overwrite_existing(data_dir):
+    save_personality(data_dir, "# Pirate v2\nNew pirate.", name="pirate")
+    text = load_personality(data_dir, "pirate")
+    assert "Pirate v2" in text
+
+
+def test_save_nested_name(data_dir):
+    result = save_personality(data_dir, "# Anime Yuki\nKawaii.", name="anime/yuki")
+    assert result["name"] == "anime/yuki"
+    names = [p["name"] for p in list_personalities(data_dir)]
+    assert "anime/yuki" in names
+
+
+def test_save_empty_content_raises(data_dir):
+    with pytest.raises(ValueError):
+        save_personality(data_dir, "")
+
+
+def test_save_whitespace_content_raises(data_dir):
+    with pytest.raises(ValueError):
+        save_personality(data_dir, "   \n  \t  ")
+
+
+def test_save_path_traversal_blocked(data_dir):
+    with pytest.raises(ValueError):
+        save_personality(data_dir, "# Evil", name="../../evil")
+
+
+def test_save_absolute_path_blocked(data_dir):
+    with pytest.raises(ValueError):
+        save_personality(data_dir, "# Evil", name="/etc/passwd")
+
+
+def test_save_then_set_and_load_roundtrip(data_dir):
+    save_personality(data_dir, "# Robot\nBeep boop.", name="robot")
+    set_active_personality(data_dir, "robot")
+    text = load_personality(data_dir)
+    assert "Beep boop" in text
+
+
+def test_save_default_then_load_roundtrip(data_dir):
+    save_personality(data_dir, "# Updated Default\nI am updated.")
+    text = load_personality(data_dir)
+    assert "Updated Default" in text
