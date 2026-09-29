@@ -6,7 +6,7 @@ import json
 
 from mcp.server.fastmcp import FastMCP
 
-from . import config, memory_store, personality, search
+from . import config, memory_store, personality, search, session_context
 
 # ---------------------------------------------------------------------------
 # Bootstrap
@@ -20,6 +20,21 @@ LTM_PATH = config.get_ltm_path(DATA_DIR, LTM_NAME)
 REVISION_LOG_PATH = config.get_revision_log_path(DATA_DIR, LTM_NAME)
 
 mcp = FastMCP("memory-mcp", json_response=True)
+
+
+@mcp.tool()
+def get_session_context(token_budget: int = 3000) -> str:
+    """Return startup context: personality, user profile, boundaries, and key memories.
+
+    Use at the beginning of each new session instead of loading the whole LTM.
+    """
+    result = session_context.build_session_context(
+        data_dir=DATA_DIR,
+        ltm_path=LTM_PATH,
+        ltm_name=LTM_NAME,
+        token_budget=token_budget,
+    )
+    return json.dumps(result, indent=2)
 
 
 # ===================================================================
@@ -63,7 +78,7 @@ def read_memories(
 
 
 @mcp.tool()
-def search_memories_tool(
+def search_memories(
     query: str,
     type_filter: str = "",
     subject_filter: str = "",
@@ -84,6 +99,24 @@ def search_memories_tool(
         token_budget=token_budget,
     )
     return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def search_memories_tool(
+    query: str,
+    type_filter: str = "",
+    subject_filter: str = "",
+    detail: str = "summary",
+    token_budget: int = 4000,
+) -> str:
+    """Backward-compatible alias for search_memories."""
+    return search_memories(
+        query=query,
+        type_filter=type_filter,
+        subject_filter=subject_filter,
+        detail=detail,
+        token_budget=token_budget,
+    )
 
 
 @mcp.tool()
@@ -199,6 +232,16 @@ def set_personality(name: str) -> str:
             return json.dumps({"active_personality": result})
         return json.dumps({"active_personality": "(default)"})
     except FileNotFoundError as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
+def save_personality(content: str, name: str = "") -> str:
+    """Save or update a personality file. Empty name = update the default personality.md. Provide a name to create/overwrite a named personality."""
+    try:
+        result = personality.save_personality(DATA_DIR, content, name)
+        return json.dumps(result)
+    except (ValueError, OSError) as e:
         return json.dumps({"error": str(e)})
 
 

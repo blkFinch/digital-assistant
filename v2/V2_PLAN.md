@@ -95,8 +95,7 @@ Memories with `priority >= 70` are considered **critical** and are auto-loaded a
 The agent does **not** load all memories at startup. Instead:
 
 **1. Startup retrieval** — fetch only critical context:
-- Active personality (`get_personality()`)
-- High-priority memories (`read_memories(min_priority=70)`) — user identity, security boundaries, key constraints
+- Session context (`get_session_context()`) — active personality, user profile, critical boundaries, communication preferences, and other high-priority memories
 - This is a small, stable set that rarely changes
 
 **2. Task-specific retrieval** — search when doing real work:
@@ -203,6 +202,7 @@ v2/memory-mcp/
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
+| `get_session_context` | `token_budget?` | Startup package with active personality, user profile, critical boundaries, communication preferences, and other high-priority memories |
 | `read_memories` | `min_priority?`, `type_filter?`, `subject_filter?`, `token_budget?` | Retrieve memories by priority threshold. Use at startup with `min_priority=70` for critical context |
 | `search_memories` | `query`, `type_filter?`, `subject_filter?`, `detail?`, `token_budget?` | Keyword search for task-relevant memories. Default returns summaries |
 | `get_memory` | `memory_id` | Get full content of a single memory by ID |
@@ -214,6 +214,26 @@ v2/memory-mcp/
 | `set_personality` | `name` | Switch active personality (empty = revert to default) |
 
 ### Search & Retrieval
+
+#### Startup Context
+
+`get_session_context()` is the preferred startup tool. It composes existing memory
+and personality primitives into one compact, deterministic response:
+
+- active personality markdown
+- preferred user name when it can be inferred from high-priority profile memories
+- high-priority user identity and preference summaries
+- high-priority boundaries and constraints
+- communication-related preferences
+- other high-priority memories that do not fit the profile or boundary buckets
+
+The tool does not perform task-specific or workspace-specific retrieval. Agents
+should still call `search_memories()` before substantial decisions.
+
+**Deferred:** workspace-aware startup memories need explicit schema support,
+such as optional `scope`, `workspace`, and `tags` fields, plus ranking rules for
+current repository relevance. Until that exists, workspace context belongs in
+task-specific `search_memories()` calls rather than `get_session_context()`.
 
 #### Two-Stage API: Summaries First, Full Content Second
 
@@ -339,9 +359,8 @@ pip install -e .
 You have access to a Memory MCP server.
 
 ### On startup:
-1. Call `get_personality()` and adopt that voice and tone for the session
-2. Call `read_memories(min_priority=70)` to load critical context — user identity, security
-   boundaries, key constraints. Do NOT load all memories.
+1. Call `get_session_context()` and adopt the returned personality,
+   communication preferences, and high-priority context. Do NOT load all memories.
 
 ### During work:
 - Before making substantial decisions, search for relevant memories:

@@ -27,3 +27,7 @@ TODO how to handle memory clean up. she seems to have no way to remove some memo
     ### Additional Improvements
     - simple Desire system - allow assistant to have 1-3 active Desires
     - can be LTM with desire type 
+
+
+TODO decompose project into MCP tools that are usable by agents
+    - start with animated puppet
