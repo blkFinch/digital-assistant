@@ -52,6 +52,22 @@ def test_successful_apply_commits_acknowledged_state() -> None:
     assert result["renderer"]["status"] == "ready"
 
 
+def test_renderer_starts_lazily_on_first_expression() -> None:
+    renderer = FakeRenderer([
+        RendererUnavailableError("not running"),
+        RendererStatus("fake", "ready"),
+    ])
+    controller = PuppetController(AssetCatalog(), renderer, PuppetState("chibi"))
+
+    assert controller.get_current_state()["renderer"]["status"] == "stopped"
+    assert controller.list_expressions()["default_expression"] == "idle"
+    assert renderer.starts == []
+
+    result = controller.set_expression("happy")
+    assert result["renderer"]["status"] == "ready"
+    assert len(renderer.starts) == 1
+
+
 def test_state_is_not_committed_until_apply_returns() -> None:
     holder = {}
 

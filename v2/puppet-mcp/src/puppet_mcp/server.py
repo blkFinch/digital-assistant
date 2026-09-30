@@ -52,7 +52,7 @@ def main() -> None:
         PuppetState(settings.puppet),
     )
     try:
-        controller.start()
+        renderer.prepare()
         create_server(controller).run(transport="stdio")
     finally:
         controller.close()

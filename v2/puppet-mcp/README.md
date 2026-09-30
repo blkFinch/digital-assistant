@@ -48,8 +48,10 @@ command/UI to register `puppet-mcp` as a local stdio command and set the env on
 that server registration. Configuration file locations and CLI flags vary by
 client release; the command and environment contract do not.
 
-Each registered server instance owns one child process, one window, and
-process-local state. Registering multiple instances creates multiple windows.
+Each registered server instance owns one headless broker child. Tk is imported
+and the window is created lazily by the first `set_expression` call, so
+registration alone does not open a window. Rendering from multiple registered
+instances creates multiple windows with process-local state.
 
 ## Configuration
 
@@ -115,10 +117,12 @@ Booleans, non-finite intensities, and out-of-range values are also rejected.
 
 ## Process and window behavior
 
-Startup is automatic and shutdown follows the stdio MCP process. Closing or
-crashing the window leaves committed state unchanged; the next
-`set_expression` performs one clean restart and retry. A failed or timed-out
-render never reports success and never commits the requested state.
+A headless child starts before the MCP request loop; Tk and its window start
+lazily on the first `set_expression` call. `get_current_state` and
+`list_expressions` do not open a window. Shutdown follows the stdio MCP process.
+Closing the window leaves committed state unchanged, and the broker recreates
+it on the next `set_expression`. A failed or timed-out render never reports
+success and never commits the requested state.
 
 Tk and image decode errors are sent back as tool/startup errors. Diagnostics go
 to stderr because stdout is reserved for MCP protocol traffic.

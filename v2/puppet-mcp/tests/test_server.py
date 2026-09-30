@@ -4,6 +4,7 @@ import sys
 
 import pytest
 
+from puppet_mcp import server as server_module
 from puppet_mcp.server import create_server
 
 
@@ -60,3 +61,40 @@ def test_controller_errors_propagate_as_tool_errors() -> None:
 
 def test_importing_server_does_not_import_tkinter_or_spawn(monkeypatch) -> None:
     assert "tkinter" not in sys.modules
+
+
+def test_main_prepares_renderer_without_opening_window(monkeypatch) -> None:
+    events = []
+
+    class MainController:
+        def start(self):
+            events.append("start")
+
+        def close(self):
+            events.append("close")
+
+    class MainServer:
+        def run(self, transport):
+            events.append(f"run:{transport}")
+
+    class MainRenderer:
+        def prepare(self):
+            events.append("prepare")
+
+    controller = MainController()
+    renderer = MainRenderer()
+    settings = type("Settings", (), {
+        "window_title": "Puppet", "startup_timeout": 1.0,
+        "command_timeout": 1.0, "puppet": "chibi",
+    })()
+    monkeypatch.setattr(server_module.multiprocessing, "freeze_support", lambda: None)
+    monkeypatch.setattr(server_module, "load_settings", lambda: settings)
+    monkeypatch.setattr(server_module, "AssetCatalog", lambda: object())
+    monkeypatch.setattr(server_module, "TkProcessRenderer", lambda **kwargs: renderer)
+    monkeypatch.setattr(server_module, "PuppetState", lambda puppet: object())
+    monkeypatch.setattr(server_module, "PuppetController", lambda *args: controller)
+    monkeypatch.setattr(server_module, "create_server", lambda value: MainServer())
+
+    server_module.main()
+
+    assert events == ["prepare", "run:stdio", "close"]
