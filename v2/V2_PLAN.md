@@ -380,16 +380,39 @@ You have access to a Memory MCP server.
 
 ## Phase 2: Puppet MCP Server (`v2/puppet-mcp/`)
 
-Controls the avatar display. Spawns a Tk viewer on a background thread; MCP tools send commands via thread-safe queue.
+Controls a standalone avatar display through a Python stdio MCP package using
+the same Hatch/src-layout conventions as Memory MCP. The MCP parent owns tool
+protocol and committed state. It always uses multiprocessing `spawn` to launch
+a child process that creates Tk and runs `Tk.mainloop()` on that child's main
+thread; Tk is never created or run on a background thread.
+
+Controller code depends on a renderer protocol (`start`, `apply`, `get_status`,
+and `close`) rather than Tk directly, leaving room for browser or OBS renderers.
+The parent and child exchange picklable command/event dictionaries through
+queues. State is committed only after an `applied` acknowledgement. Closing or
+crashing the window causes one clean restart and retry on the next expression
+change.
 
 ### Tools
 - `set_expression(expression, intensity)` — control avatar emotion
 - `get_current_state()` — current expression + intensity
 - `list_expressions()` — available expressions from PNG assets
 
+These are the complete baseline tools. Puppet choice is startup configuration
+through `PUPPET_MCP_PUPPET=chibi|saki`; both packs are bundled. Runtime
+`list_puppets`/`set_puppet` and lifecycle `start_viewer`/`stop_viewer`/`show`/
+`hide` tools are deferred as additive follow-ups rather than partially reserved
+APIs. One server instance owns one window and process-local state.
+
+The wheel explicitly includes all PNGs. The Tk backend uses native Tk 8.6
+`PhotoImage(file=...)` PNG support and does not add Pillow. Automated tests use
+fake renderers and a real no-Tk spawned child, so they require neither Tk nor a
+display. Manual smoke tests cover native image decode and graphical lifecycle.
+
 ### Ported From
-- `core_agent/app/png_viewer.py` → `viewer.py`
-- Queue pattern from `core_agent/app/dev_cockpit.py`
+- Behavior and assets from `core_agent/app/puppet/png_viewer.py` and
+  `core_agent/app/resources/puppets/`
+- Reimplemented behind `renderer.py` and `tk_renderer.py`; V1 remains unchanged
 
 ---
 
@@ -417,4 +440,7 @@ Once all three MCP servers are working, `core_agent/` can be retired or converte
 
 ## Rollback
 
-All V2 work is additive under `v2/`. Delete the directory to revert. Zero changes to `core_agent/`.
+V2 package work is additive under `v2/`. For Phase 2, remove
+`v2/puppet-mcp/` and revert only this Phase 2 plan edit. The only existing file
+changed is `v2/V2_PLAN.md`; there are zero changes to `core_agent/`, so V1 needs
+no migration or rollback.

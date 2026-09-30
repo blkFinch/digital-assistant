@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "puppet-mcp"
+version = "0.1.0"
+description = "MCP server for controlling a standalone PNG puppet window"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.28.0,<2",
+]
+
+[project.scripts]
+puppet-mcp = "puppet_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/puppet_mcp"]
+include = [
+    "src/puppet_mcp/**/*.py",
+    "src/puppet_mcp/assets/**/*.png",
+]
